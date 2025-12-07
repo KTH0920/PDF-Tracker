@@ -9,6 +9,9 @@ import useDarkMode from '../hooks/useDarkMode';
 import DashboardNetflix from './DashboardNetflix';
 import DashboardKanban from './DashboardKanban';
 import DashboardDev from './DashboardDev';
+import DashboardZen from './DashboardZen';
+import DashboardGame from './DashboardGame';
+import DashboardBento from './DashboardBento';
 
 const Dashboard = () => {
   const [user, setUser] = useState(null);
@@ -16,7 +19,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
-  const [activeView, setActiveView] = useState('netflix'); // 'netflix', 'kanban', 'dev'
+  const [activeView, setActiveView] = useState('netflix'); // 'netflix', 'kanban', 'dev', 'zen', 'game', 'bento'
   const navigate = useNavigate();
   const [isDark, toggleDarkMode] = useDarkMode();
 
@@ -156,38 +159,28 @@ const Dashboard = () => {
             <h1 className="text-2xl font-bold text-gray-800 dark:text-white">PDF Focus Tracker</h1>
           </div>
           <div className="flex items-center gap-4">
-            {/* 뷰 전환 탭 */}
-            <div className="flex gap-2 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-              <button
-                onClick={() => setActiveView('netflix')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  activeView === 'netflix'
-                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
-                }`}
-              >
-                Netflix
-              </button>
-              <button
-                onClick={() => setActiveView('kanban')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  activeView === 'kanban'
-                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
-                }`}
-              >
-                Kanban
-              </button>
-              <button
-                onClick={() => setActiveView('dev')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  activeView === 'dev'
-                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
-                }`}
-              >
-                Terminal
-              </button>
+            {/* 뷰 전환 탭 - 가로 스크롤 */}
+            <div className="flex gap-2 bg-gray-100 dark:bg-gray-700 rounded-lg p-1 overflow-x-auto scrollbar-hide max-w-md">
+              {[
+                { id: 'netflix', label: 'Netflix' },
+                { id: 'kanban', label: 'Kanban' },
+                { id: 'dev', label: 'Terminal' },
+                { id: 'zen', label: 'Zen' },
+                { id: 'game', label: 'Game' },
+                { id: 'bento', label: 'Bento' },
+              ].map((view) => (
+                <button
+                  key={view.id}
+                  onClick={() => setActiveView(view.id)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
+                    activeView === view.id
+                      ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  {view.label}
+                </button>
+              ))}
             </div>
             <button
               onClick={toggleDarkMode}
@@ -213,6 +206,9 @@ const Dashboard = () => {
         {activeView === 'netflix' && <DashboardNetflix {...commonProps} />}
         {activeView === 'kanban' && <DashboardKanban {...commonProps} />}
         {activeView === 'dev' && <DashboardDev {...commonProps} />}
+        {activeView === 'zen' && <DashboardZen {...commonProps} />}
+        {activeView === 'game' && <DashboardGame {...commonProps} />}
+        {activeView === 'bento' && <DashboardBento {...commonProps} />}
       </main>
     </div>
   );
