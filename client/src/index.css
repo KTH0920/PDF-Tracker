@@ -26,3 +26,13 @@
 .react-pdf__Outline__item:hover {
   background-color: #f3f4f6;
 }
+
+/* 가로 스크롤 숨기기 */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
