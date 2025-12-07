@@ -2,13 +2,25 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/x-icon" href="/pdf-icon.ico" />
+    <link rel="icon" type="image/x-icon" href="/pdf-icon-(32x32).ico" />
     <link rel="icon" type="image/x-icon" sizes="16x16" href="/pdf-icon-16.ico" />
     <link rel="icon" type="image/x-icon" sizes="32x32" href="/pdf-icon-(32x32).ico" />
     <link rel="icon" type="image/x-icon" sizes="96x96" href="/pdf-icon-96.ico" />
     <link rel="icon" type="image/x-icon" sizes="256x256" href="/pdf-icon-256.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PDF Focus Tracker</title>
+    <script>
+      // 초기 렌더링 시 테마 즉시 적용 (깜빡임 방지)
+      (function() {
+        const savedTheme = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

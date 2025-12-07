@@ -1,3 +1,28 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* 목차 사이드바 다크 모드 스타일 */
+.dark .react-pdf__Outline {
+  color: #e5e7eb;
+}
+
+.dark .react-pdf__Outline__item {
+  color: #d1d5db;
+}
+
+.dark .react-pdf__Outline__item:hover {
+  background-color: #374151;
+  color: #ffffff;
+}
+
+.react-pdf__Outline__item {
+  padding: 0.5rem;
+  cursor: pointer;
+  border-radius: 0.25rem;
+  transition: background-color 0.2s;
+}
+
+.react-pdf__Outline__item:hover {
+  background-color: #f3f4f6;
+}

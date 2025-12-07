@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { updateProgress, fetchPDFs } from '../api';
 import { auth } from '../firebase';
-import { FaArrowLeft, FaCheckCircle } from 'react-icons/fa';
+import { FaArrowLeft, FaCheckCircle, FaSun, FaMoon } from 'react-icons/fa';
+import useDarkMode from '../hooks/useDarkMode';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
@@ -24,6 +25,7 @@ const Viewer = () => {
   const containerRef = useRef(null);
   const lastUpdateTime = useRef(0);
   const updateTimeoutRef = useRef(null);
+  const [isDark, toggleDarkMode] = useDarkMode();
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((currentUser) => {
@@ -153,12 +155,13 @@ const Viewer = () => {
     setLoading(false);
   };
 
+
   if (loading && !pdfInfo) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">PDF를 불러오는 중...</p>
+          <p className="text-gray-600 dark:text-gray-300">PDF를 불러오는 중...</p>
         </div>
       </div>
     );
@@ -166,12 +169,12 @@ const Viewer = () => {
 
   if (!pdfInfo) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
-          <p className="text-gray-600 mb-4">PDF를 찾을 수 없습니다.</p>
+          <p className="text-gray-600 dark:text-gray-300 mb-4">PDF를 찾을 수 없습니다.</p>
           <button
             onClick={() => navigate('/dashboard')}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+            className="px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white rounded-lg hover:bg-blue-600 dark:hover:bg-blue-700"
           >
             대시보드로 돌아가기
           </button>
@@ -181,28 +184,37 @@ const Viewer = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Sticky Progress Bar */}
-      <div className="sticky top-0 z-50 bg-white shadow-md border-b">
+      <div className="sticky top-0 z-50 bg-white dark:bg-gray-800 shadow-md border-b dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-4">
               <button
                 onClick={() => navigate('/dashboard')}
-                className="flex items-center gap-2 text-gray-600 hover:text-gray-800"
+                className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white"
               >
                 <FaArrowLeft />
                 뒤로가기
               </button>
-              <h2 className="text-lg font-semibold text-gray-800 truncate">
+              <h2 className="text-lg font-semibold text-gray-800 dark:text-white truncate">
                 {pdfInfo.title}
               </h2>
             </div>
-            <div className="text-sm text-gray-600">
-              페이지 {currentPage} / {numPages || '?'}
+            <div className="flex items-center gap-4">
+              <button
+                onClick={toggleDarkMode}
+                className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                title={isDark ? '라이트 모드로 전환' : '다크 모드로 전환'}
+              >
+                {isDark ? <FaSun className="text-lg" /> : <FaMoon className="text-lg" />}
+              </button>
+              <div className="text-sm text-gray-600 dark:text-gray-300">
+                페이지 {currentPage} / {numPages || '?'}
+              </div>
             </div>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-3">
+          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
             <div
               className={`h-3 rounded-full transition-all duration-300 ${
                 progress >= 100 ? 'bg-green-500' : 'bg-blue-500'
@@ -211,11 +223,11 @@ const Viewer = () => {
             ></div>
           </div>
           <div className="flex items-center justify-between mt-1">
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-gray-500 dark:text-gray-400">
               진행률: {Math.round(progress)}%
             </span>
             {isComplete && (
-              <span className="flex items-center gap-1 text-xs text-green-600 font-semibold">
+              <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-semibold">
                 <FaCheckCircle />
                 완료!
               </span>
@@ -230,7 +242,7 @@ const Viewer = () => {
         className="max-w-4xl mx-auto px-4 py-8 overflow-y-auto"
         style={{ maxHeight: 'calc(100vh - 120px)' }}
       >
-        <div className="bg-white shadow-lg rounded-lg p-4">
+        <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-4">
           <Document
             file={pdfInfo.filePath}
             onLoadSuccess={onDocumentLoadSuccess}
