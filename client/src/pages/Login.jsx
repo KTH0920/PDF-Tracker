@@ -26,6 +26,11 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
+          <img 
+            src="/pdf-icon-256.ico" 
+            alt="PDF Focus Tracker Logo" 
+            className="h-20 w-auto mx-auto mb-4 object-contain"
+          />
           <h1 className="text-3xl font-bold text-gray-800 mb-2">
             PDF Focus Tracker
           </h1>
