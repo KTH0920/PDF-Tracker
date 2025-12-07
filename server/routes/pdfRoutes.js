@@ -6,7 +6,9 @@ import path from 'path';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
-const pdfParse = require('pdf-parse');
+const pdfParseModule = require('pdf-parse');
+// pdf-parse는 CommonJS 모듈이므로 default export 확인
+const pdfParse = pdfParseModule.default || pdfParseModule;
 
 const router = express.Router();
 
