@@ -1,9 +1,12 @@
 import express from 'express';
 import upload from '../middleware/upload.js';
 import UserPDF from '../models/UserPDF.js';
-import pdf from 'pdf-parse';
 import fs from 'fs';
 import path from 'path';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const pdfParse = require('pdf-parse');
 
 const router = express.Router();
 
@@ -25,7 +28,7 @@ router.post('/upload', upload.single('pdf'), async (req, res) => {
     let totalPage = 0;
     try {
       const dataBuffer = fs.readFileSync(req.file.path);
-      const data = await pdf(dataBuffer);
+      const data = await pdfParse(dataBuffer);
       totalPage = data.numpages;
     } catch (error) {
       console.error('PDF 페이지 수 계산 실패:', error);
