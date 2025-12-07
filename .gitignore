@@ -41,6 +41,9 @@ Thumbs.db
 server/uploads/*
 !server/uploads/.gitkeep
 
+# Server secrets (민감한 정보)
+server/secrets.js
+
 # Build outputs
 *.log
 

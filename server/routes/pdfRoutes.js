@@ -1,14 +1,17 @@
 import express from 'express';
 import upload from '../middleware/upload.js';
 import UserPDF from '../models/UserPDF.js';
+import mongoose from 'mongoose';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 
+// ES 모듈에서 __dirname 사용하기
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const require = createRequire(import.meta.url);
-const pdfParseModule = require('pdf-parse');
-// pdf-parse는 CommonJS 모듈이므로 default export 확인
-const pdfParse = pdfParseModule.default || pdfParseModule;
 
 const router = express.Router();
 
@@ -23,17 +26,22 @@ router.post('/upload', upload.single('pdf'), async (req, res) => {
       return res.status(400).json({ error: 'userId가 필요합니다.' });
     }
 
-    const filePath = `http://localhost:5000/uploads/${req.file.filename}`;
+    // filePath는 파일명을 URL 인코딩하여 저장 (한글 파일명 지원)
+    // 실제 파일은 원본 파일명으로 저장되지만, URL 접근 시에는 인코딩 필요
+    const filePath = `http://localhost:5000/uploads/${encodeURIComponent(req.file.filename)}`;
     const fileTitle = req.body.title || req.file.originalname;
 
     // PDF 페이지 수 계산
     let totalPage = 0;
     try {
       const dataBuffer = fs.readFileSync(req.file.path);
+      // pdf-parse 1.1.1 버전은 함수로 export됨
+      const pdfParse = require('pdf-parse');
       const data = await pdfParse(dataBuffer);
       totalPage = data.numpages;
     } catch (error) {
       console.error('PDF 페이지 수 계산 실패:', error);
+      console.error('에러 상세:', error.message);
     }
 
     // DB에 저장
@@ -74,6 +82,61 @@ router.get('/list/:userId', async (req, res) => {
   } catch (error) {
     console.error('목록 조회 에러:', error);
     res.status(500).json({ error: 'PDF 목록 조회 중 오류가 발생했습니다.' });
+  }
+});
+
+// 모든 PDF 조회 (테스트용 - 모든 데이터 확인)
+router.get('/all', async (req, res) => {
+  try {
+    const pdfs = await UserPDF.find({}).sort({ createdAt: -1 });
+    
+    res.json({
+      success: true,
+      count: pdfs.length,
+      database: mongoose.connection.db?.databaseName || 'pdf-tracker',
+      collection: 'userpdfs',
+      pdfs: pdfs,
+    });
+  } catch (error) {
+    console.error('전체 조회 에러:', error);
+    res.status(500).json({ error: 'PDF 목록 조회 중 오류가 발생했습니다.' });
+  }
+});
+
+// PDF 삭제
+router.delete('/:pdfId', async (req, res) => {
+  try {
+    const { pdfId } = req.params;
+
+    const pdf = await UserPDF.findById(pdfId);
+    if (!pdf) {
+      return res.status(404).json({ error: 'PDF를 찾을 수 없습니다.' });
+    }
+
+    // 파일 경로에서 실제 파일명 추출
+    const fileUrl = pdf.filePath;
+    const fileName = decodeURIComponent(fileUrl.split('/').pop());
+    const filePath = path.join(__dirname, '../uploads', fileName);
+
+    // DB에서 삭제
+    await UserPDF.findByIdAndDelete(pdfId);
+
+    // 실제 파일 삭제
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch (fileError) {
+      console.error('파일 삭제 실패 (DB는 삭제됨):', fileError.message);
+    }
+
+    res.json({
+      success: true,
+      message: 'PDF가 삭제되었습니다.',
+    });
+  } catch (error) {
+    console.error('PDF 삭제 에러:', error);
+    res.status(500).json({ error: 'PDF 삭제 중 오류가 발생했습니다.' });
   }
 });
 

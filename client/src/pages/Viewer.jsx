@@ -7,8 +7,8 @@ import { FaArrowLeft, FaCheckCircle } from 'react-icons/fa';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
-// PDF.js worker 설정
-pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+// PDF.js worker 설정 - unpkg CDN 사용 (mjs 확장자)
+pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 const Viewer = () => {
   const { id } = useParams();
@@ -147,7 +147,9 @@ const Viewer = () => {
 
   const onDocumentLoadError = (error) => {
     console.error('PDF 로드 에러:', error);
-    alert('PDF 파일을 불러오는데 실패했습니다.');
+    console.error('에러 상세:', error.message);
+    console.error('PDF 경로:', pdfInfo?.filePath);
+    alert(`PDF 파일을 불러오는데 실패했습니다.\n에러: ${error.message || '알 수 없는 오류'}`);
     setLoading(false);
   };
 

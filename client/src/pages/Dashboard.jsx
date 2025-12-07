@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 import { fetchPDFs, uploadPDF } from '../api';
-import { FaSignOutAlt, FaUpload, FaFilePdf, FaSpinner } from 'react-icons/fa';
+import { FaSignOutAlt, FaUpload, FaFilePdf, FaSpinner, FaTrash } from 'react-icons/fa';
+import { deletePDF } from '../api';
 
 const Dashboard = () => {
   const [user, setUser] = useState(null);
@@ -107,6 +108,23 @@ const Dashboard = () => {
     });
   };
 
+  const handleDelete = async (e, pdfId) => {
+    e.stopPropagation(); // 카드 클릭 이벤트 방지
+    
+    if (!window.confirm('정말 이 PDF를 삭제하시겠습니까?')) {
+      return;
+    }
+
+    try {
+      await deletePDF(pdfId);
+      await loadPDFs(user.uid);
+      alert('PDF가 삭제되었습니다.');
+    } catch (error) {
+      console.error('삭제 에러:', error);
+      alert('PDF 삭제에 실패했습니다.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 헤더 */}
@@ -188,29 +206,46 @@ const Dashboard = () => {
               {pdfs.map((pdf) => (
                 <div
                   key={pdf._id}
-                  onClick={() => navigate(`/viewer/${pdf._id}`)}
-                  className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer p-6 border border-gray-200"
+                  className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border border-gray-200 relative"
                 >
                   <div className="flex items-start gap-4">
                     <FaFilePdf className="text-4xl text-red-500 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-800 truncate mb-2">
-                        {pdf.title}
-                      </h3>
-                      <div className="space-y-1 text-sm text-gray-600">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h3 
+                          className="font-semibold text-gray-800 truncate cursor-pointer"
+                          onClick={() => navigate(`/viewer/${pdf._id}`)}
+                        >
+                          {pdf.title}
+                        </h3>
+                        <button
+                          onClick={(e) => handleDelete(e, pdf._id)}
+                          className="flex-shrink-0 p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          title="삭제"
+                        >
+                          <FaTrash className="text-sm" />
+                        </button>
+                      </div>
+                      <div 
+                        className="space-y-1 text-sm text-gray-600 cursor-pointer"
+                        onClick={() => navigate(`/viewer/${pdf._id}`)}
+                      >
                         <p>총 페이지: {pdf.totalPage || 'N/A'}</p>
                         <p>현재 페이지: {pdf.currentPage || 1}</p>
                         <p>마지막 접근: {formatDate(pdf.lastAccessed)}</p>
                       </div>
-                      <div className="mt-3">
+                      <div 
+                        className="mt-3 cursor-pointer"
+                        onClick={() => navigate(`/viewer/${pdf._id}`)}
+                      >
                         <div className="w-full bg-gray-200 rounded-full h-2">
                           <div
                             className="bg-blue-500 h-2 rounded-full transition-all"
-                            style={{ width: `${pdf.progress || 0}%` }}
+                            style={{ width: `${Math.min(100, Math.max(0, pdf.progress || 0))}%` }}
                           ></div>
                         </div>
                         <p className="text-xs text-gray-500 mt-1">
-                          진행률: {pdf.progress || 0}%
+                          진행률: {Math.round(pdf.progress || 0)}%
                         </p>
                       </div>
                     </div>

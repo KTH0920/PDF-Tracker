@@ -33,5 +33,11 @@ export const updateProgress = async (pdfId, currentPage, progress) => {
   return response.data;
 };
 
+// PDF 삭제
+export const deletePDF = async (pdfId) => {
+  const response = await api.delete(`/api/pdf/${pdfId}`);
+  return response.data;
+};
+
 export default api;
 
