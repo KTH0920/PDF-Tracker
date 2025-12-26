@@ -9,18 +9,20 @@ const Login = () => {
   const navigate = useNavigate();
 
   const login = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
+    flow: 'auth-code', // Authorization Code Flow 사용
+    onSuccess: async (codeResponse) => {
       try {
         setLoading(true);
-        // Google Access Token을 백엔드로 전송하여 검증 및 JWT 발급
+        // Authorization Code를 백엔드로 전송하여 검증 및 JWT 발급
         const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/google`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: tokenResponse.access_token })
+          body: JSON.stringify({ code: codeResponse.code })
         });
 
         if (!response.ok) {
-          throw new Error('인증 실패');
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || '인증 실패');
         }
 
         const data = await response.json();
@@ -31,7 +33,7 @@ const Login = () => {
         navigate('/dashboard');
       } catch (error) {
         console.error('로그인 에러:', error);
-        alert('로그인에 실패했습니다. 다시 시도해주세요.');
+        alert(`로그인에 실패했습니다: ${error.message}`);
       } finally {
         setLoading(false);
       }

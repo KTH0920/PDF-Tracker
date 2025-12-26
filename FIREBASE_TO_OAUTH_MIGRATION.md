@@ -51,7 +51,8 @@
      ```
      (프로덕션 환경이 있다면 해당 도메인도 추가)
    - 만들기 버튼 클릭
-   - **클라이언트 ID 복사** (나중에 .env 파일에 사용)
+   - **클라이언트 ID와 클라이언트 보안 비밀번호 모두 복사** (나중에 .env 파일에 사용)
+   - ⚠️ **중요**: 클라이언트 보안 비밀번호는 한 번만 표시되므로 반드시 복사해두세요!
 
 ### 2. 환경 변수 설정
 
@@ -67,8 +68,10 @@ PORT=5000
 # 서버 URL
 SERVER_URL=http://localhost:5000
 
-# Google OAuth Client ID (위에서 복사한 값)
+# Google OAuth 설정 (위에서 복사한 값)
 GOOGLE_CLIENT_ID=your-google-client-id-here.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-google-client-secret-here
+GOOGLE_REDIRECT_URI=http://localhost:5173
 
 # JWT Secret (랜덤한 강력한 문자열 생성)
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
