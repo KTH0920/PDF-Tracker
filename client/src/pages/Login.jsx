@@ -1,25 +1,51 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInWithPopup } from 'firebase/auth';
-import { auth, googleProvider } from '../firebase';
+import { useGoogleLogin } from '@react-oauth/google';
+import { setAuth } from '../auth';
 import { FaGoogle } from 'react-icons/fa';
 
 const Login = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleGoogleLogin = async () => {
-    try {
-      setLoading(true);
-      const result = await signInWithPopup(auth, googleProvider);
-      // 로그인 성공 시 대시보드로 이동
-      navigate('/dashboard');
-    } catch (error) {
-      console.error('로그인 에러:', error);
-      alert('로그인에 실패했습니다. 다시 시도해주세요.');
-    } finally {
+  const login = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      try {
+        setLoading(true);
+        // Google Access Token을 백엔드로 전송하여 검증 및 JWT 발급
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/google`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: tokenResponse.access_token })
+        });
+
+        if (!response.ok) {
+          throw new Error('인증 실패');
+        }
+
+        const data = await response.json();
+        // JWT 토큰과 사용자 정보를 localStorage에 저장
+        setAuth(data.token, data.user);
+        
+        // 대시보드로 이동
+        navigate('/dashboard');
+      } catch (error) {
+        console.error('로그인 에러:', error);
+        alert('로그인에 실패했습니다. 다시 시도해주세요.');
+      } finally {
+        setLoading(false);
+      }
+    },
+    onError: () => {
+      console.error('로그인 실패');
       setLoading(false);
+      alert('로그인에 실패했습니다. 다시 시도해주세요.');
     }
+  });
+
+  const handleGoogleLogin = () => {
+    setLoading(true);
+    login();
   };
 
   return (

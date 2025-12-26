@@ -1,5 +1,6 @@
 import express from 'express';
 import upload from '../middleware/upload.js';
+import { authenticateToken } from '../middleware/auth.js';
 import UserPDF from '../models/UserPDF.js';
 import mongoose from 'mongoose';
 import fs from 'fs';
@@ -15,6 +16,9 @@ const require = createRequire(import.meta.url);
 
 const router = express.Router();
 
+// 모든 라우트에 인증 미들웨어 적용
+router.use(authenticateToken);
+
 // PDF 파일 업로드
 router.post('/upload', upload.single('pdf'), async (req, res) => {
   try {
@@ -22,13 +26,13 @@ router.post('/upload', upload.single('pdf'), async (req, res) => {
       return res.status(400).json({ error: 'PDF 파일이 필요합니다.' });
     }
 
-    if (!req.body.userId) {
-      return res.status(400).json({ error: 'userId가 필요합니다.' });
-    }
+    // 인증된 사용자의 ID 사용
+    const userId = req.user.userId;
 
     // filePath는 파일명을 URL 인코딩하여 저장 (한글 파일명 지원)
     // 실제 파일은 원본 파일명으로 저장되지만, URL 접근 시에는 인코딩 필요
-    const filePath = `http://localhost:5000/uploads/${encodeURIComponent(req.file.filename)}`;
+    const SERVER_URL = process.env.SERVER_URL || 'http://localhost:5000';
+    const filePath = `${SERVER_URL}/uploads/${encodeURIComponent(req.file.filename)}`;
     const fileTitle = req.body.title || req.file.originalname;
 
     // PDF 페이지 수 계산
@@ -46,7 +50,7 @@ router.post('/upload', upload.single('pdf'), async (req, res) => {
 
     // DB에 저장
     const userPDF = new UserPDF({
-      userId: req.body.userId,
+      userId: userId,
       title: fileTitle,
       filePath: filePath,
       totalPage: totalPage,
@@ -67,10 +71,10 @@ router.post('/upload', upload.single('pdf'), async (req, res) => {
   }
 });
 
-// 특정 유저의 PDF 목록 조회
-router.get('/list/:userId', async (req, res) => {
+// 특정 유저의 PDF 목록 조회 (현재 로그인한 사용자의 목록만 조회)
+router.get('/list', async (req, res) => {
   try {
-    const { userId } = req.params;
+    const userId = req.user.userId;
 
     const pdfs = await UserPDF.find({ userId }).sort({ lastAccessed: -1 });
 

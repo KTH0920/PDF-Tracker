@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from './firebase';
+import { getUser } from './auth';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Viewer from './pages/Viewer';
@@ -11,12 +10,10 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    // localStorage에서 사용자 정보 확인
+    const currentUser = getUser();
+    setUser(currentUser);
+    setLoading(false);
   }, []);
 
   if (loading) {

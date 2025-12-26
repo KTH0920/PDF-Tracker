@@ -1,10 +1,14 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
+import dotenv from 'dotenv';
 import pdfRoutes from './routes/pdfRoutes.js';
+import authRoutes from './routes/authRoutes.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { MONGO_URI } from './secrets.js';
+
+// 환경 변수 로드
+dotenv.config();
 
 // ES 모듈에서 __dirname 사용하기
 const __filename = fileURLToPath(import.meta.url);
@@ -12,6 +16,7 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/pdf-tracker';
 
 // 미들웨어 설정
 app.use(cors()); // 모든 요청 허용
@@ -56,6 +61,7 @@ const connectDB = async () => {
 connectDB();
 
 // 라우트 연결
+app.use('/api/auth', authRoutes);
 app.use('/api/pdf', pdfRoutes);
 
 // 기본 라우트

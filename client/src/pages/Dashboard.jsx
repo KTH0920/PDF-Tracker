@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signOut } from 'firebase/auth';
-import { auth } from '../firebase';
+import { getUser, clearAuth } from '../auth';
 import { fetchPDFs, uploadPDF } from '../api';
 import { FaSignOutAlt, FaUpload, FaFilePdf, FaSpinner, FaTrash, FaSun, FaMoon } from 'react-icons/fa';
 import { deletePDF } from '../api';
@@ -17,22 +16,19 @@ const Dashboard = () => {
   const [isDark, toggleDarkMode] = useDarkMode();
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-        loadPDFs(currentUser.uid);
-      } else {
-        navigate('/');
-      }
-    });
-
-    return () => unsubscribe();
+    const currentUser = getUser();
+    if (currentUser) {
+      setUser(currentUser);
+      loadPDFs();
+    } else {
+      navigate('/');
+    }
   }, [navigate]);
 
-  const loadPDFs = async (userId) => {
+  const loadPDFs = async () => {
     try {
       setLoading(true);
-      const data = await fetchPDFs(userId);
+      const data = await fetchPDFs();
       setPdfs(data.pdfs || []);
     } catch (error) {
       console.error('PDF 목록 로드 실패:', error);
@@ -42,13 +38,9 @@ const Dashboard = () => {
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      navigate('/');
-    } catch (error) {
-      console.error('로그아웃 에러:', error);
-    }
+  const handleLogout = () => {
+    clearAuth();
+    navigate('/');
   };
 
   const handleFileUpload = async (file) => {
@@ -61,11 +53,11 @@ const Dashboard = () => {
       setUploading(true);
       const formData = new FormData();
       formData.append('pdf', file);
-      formData.append('userId', user.uid);
+      // userId는 백엔드에서 인증 토큰에서 추출
       formData.append('title', file.name);
 
       await uploadPDF(formData);
-      await loadPDFs(user.uid);
+      await loadPDFs();
       alert('파일 업로드가 완료되었습니다!');
     } catch (error) {
       console.error('업로드 에러:', error);
@@ -119,7 +111,7 @@ const Dashboard = () => {
 
     try {
       await deletePDF(pdfId);
-      await loadPDFs(user.uid);
+      await loadPDFs();
       alert('PDF가 삭제되었습니다.');
     } catch (error) {
       console.error('삭제 에러:', error);

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { updateProgress, fetchPDFs } from '../api';
-import { auth } from '../firebase';
+import { getUser } from '../auth';
 import { FaArrowLeft, FaCheckCircle, FaSun, FaMoon } from 'react-icons/fa';
 import useDarkMode from '../hooks/useDarkMode';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -28,21 +28,18 @@ const Viewer = () => {
   const [isDark, toggleDarkMode] = useDarkMode();
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-        loadPDFInfo(currentUser.uid);
-      } else {
-        navigate('/');
-      }
-    });
-
-    return () => unsubscribe();
+    const currentUser = getUser();
+    if (currentUser) {
+      setUser(currentUser);
+      loadPDFInfo();
+    } else {
+      navigate('/');
+    }
   }, [navigate]);
 
-  const loadPDFInfo = async (userId) => {
+  const loadPDFInfo = async () => {
     try {
-      const data = await fetchPDFs(userId);
+      const data = await fetchPDFs();
       const pdf = data.pdfs.find((p) => p._id === id);
       if (pdf) {
         setPdfInfo(pdf);
