@@ -21,9 +21,10 @@ const Dashboard = () => {
       setUser(currentUser);
       loadPDFs();
     } else {
-      navigate('/');
+      navigate('/', { replace: true });
     }
-  }, [navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 빈 배열: 컴포넌트 마운트 시 한 번만 실행
 
   const loadPDFs = async () => {
     try {
@@ -40,7 +41,8 @@ const Dashboard = () => {
 
   const handleLogout = () => {
     clearAuth();
-    navigate('/');
+    // replace: true로 설정하여 히스토리에 남기지 않음
+    navigate('/', { replace: true });
   };
 
   const handleFileUpload = async (file) => {

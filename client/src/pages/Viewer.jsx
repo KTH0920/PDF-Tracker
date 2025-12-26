@@ -33,9 +33,10 @@ const Viewer = () => {
       setUser(currentUser);
       loadPDFInfo();
     } else {
-      navigate('/');
+      navigate('/', { replace: true });
     }
-  }, [navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 빈 배열: 컴포넌트 마운트 시 한 번만 실행
 
   const loadPDFInfo = async () => {
     try {
