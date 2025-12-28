@@ -2,7 +2,6 @@ import express from 'express';
 import upload from '../middleware/upload.js';
 import { authenticateToken } from '../middleware/auth.js';
 import UserPDF from '../models/UserPDF.js';
-import mongoose from 'mongoose';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -31,7 +30,8 @@ router.post('/upload', upload.single('pdf'), async (req, res) => {
 
     // filePath는 파일명을 URL 인코딩하여 저장 (한글 파일명 지원)
     // 실제 파일은 원본 파일명으로 저장되지만, URL 접근 시에는 인코딩 필요
-    const SERVER_URL = process.env.SERVER_URL || 'http://localhost:5000';
+    // SERVER_URL 끝의 슬래시 제거 (중복 슬래시 방지)
+    const SERVER_URL = (process.env.SERVER_URL || 'http://localhost:5000').replace(/\/$/, '');
     const filePath = `${SERVER_URL}/uploads/${encodeURIComponent(req.file.filename)}`;
     const fileTitle = req.body.title || req.file.originalname;
 
@@ -89,30 +89,14 @@ router.get('/list', async (req, res) => {
   }
 });
 
-// 모든 PDF 조회 (테스트용 - 모든 데이터 확인)
-router.get('/all', async (req, res) => {
-  try {
-    const pdfs = await UserPDF.find({}).sort({ createdAt: -1 });
-    
-    res.json({
-      success: true,
-      count: pdfs.length,
-      database: mongoose.connection.db?.databaseName || 'pdf-tracker',
-      collection: 'userpdfs',
-      pdfs: pdfs,
-    });
-  } catch (error) {
-    console.error('전체 조회 에러:', error);
-    res.status(500).json({ error: 'PDF 목록 조회 중 오류가 발생했습니다.' });
-  }
-});
-
 // PDF 삭제
 router.delete('/:pdfId', async (req, res) => {
   try {
     const { pdfId } = req.params;
+    const userId = req.user.userId;
 
-    const pdf = await UserPDF.findById(pdfId);
+    // 사용자 소유 확인
+    const pdf = await UserPDF.findOne({ _id: pdfId, userId });
     if (!pdf) {
       return res.status(404).json({ error: 'PDF를 찾을 수 없습니다.' });
     }
@@ -151,6 +135,16 @@ router.put('/progress', async (req, res) => {
 
     if (!pdfId) {
       return res.status(400).json({ error: 'pdfId가 필요합니다.' });
+    }
+
+    // 진행률 검증
+    if (progress !== undefined && (typeof progress !== 'number' || progress < 0 || progress > 100)) {
+      return res.status(400).json({ error: '진행률은 0-100 사이의 숫자여야 합니다.' });
+    }
+
+    // 페이지 번호 검증
+    if (currentPage !== undefined && (typeof currentPage !== 'number' || currentPage < 1 || !Number.isInteger(currentPage))) {
+      return res.status(400).json({ error: '현재 페이지는 1 이상의 정수여야 합니다.' });
     }
 
     const updateData = {

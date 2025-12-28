@@ -1,11 +1,13 @@
 import axios from 'axios';
 import { getToken, clearAuth } from './auth';
+import { API_BASE_URL } from './utils/constants';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000',
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 30000, // 30초 타임아웃
 });
 
 // 요청 인터셉터: 토큰 추가
@@ -24,6 +26,10 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       clearAuth();
       window.location.href = '/';
+    }
+    // 네트워크 에러 처리
+    if (!error.response) {
+      console.error('네트워크 에러:', error.message);
     }
     return Promise.reject(error);
   }

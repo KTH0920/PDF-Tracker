@@ -6,6 +6,7 @@ import pdfRoutes from './routes/pdfRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { validateEnvVars } from './utils/env.js';
 
 // 환경 변수 로드
 dotenv.config();
@@ -18,6 +19,16 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/pdf-tracker';
 
+// 환경 변수 검증 (프로덕션 환경에서만)
+if (process.env.NODE_ENV === 'production') {
+  try {
+    validateEnvVars(['MONGO_URI', 'JWT_SECRET']);
+  } catch (error) {
+    console.error('❌ 환경 변수 검증 실패:', error.message);
+    process.exit(1);
+  }
+}
+
 // 미들웨어 설정
 app.use(cors()); // 모든 요청 허용
 app.use(express.json()); // JSON 파싱
@@ -26,8 +37,14 @@ app.use(express.urlencoded({ extended: true })); // URL 인코딩된 데이터 �
 // 정적 파일 제공 (uploads 폴더) - CORS 헤더 추가 및 파일명 디코딩
 app.use('/uploads', (req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  // OPTIONS 요청 처리 (CORS preflight)
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
   
   // URL 인코딩된 파일명 디코딩
   if (req.url) {
@@ -41,9 +58,10 @@ app.use('/uploads', (req, res, next) => {
   next();
 }, express.static(path.join(__dirname, 'uploads'), {
   setHeaders: (res, filePath) => {
-    // PDF 파일에 대한 Content-Type 설정
+    // PDF 파일에 대한 Content-Type 및 CORS 헤더 설정
     if (filePath.endsWith('.pdf')) {
       res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Access-Control-Allow-Origin', '*');
     }
   }
 }));

@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getUser, clearAuth } from '../auth';
-import { fetchPDFs, uploadPDF } from '../api';
+import { fetchPDFs, uploadPDF, deletePDF } from '../api';
 import { FaSignOutAlt, FaUpload, FaFilePdf, FaSpinner, FaTrash, FaSun, FaMoon } from 'react-icons/fa';
-import { deletePDF } from '../api';
 import useDarkMode from '../hooks/useDarkMode';
+import { formatDate } from '../utils/dateUtils';
+import { validatePDFFile } from '../utils/validation';
 
 const Dashboard = () => {
   const [user, setUser] = useState(null);
@@ -24,9 +25,9 @@ const Dashboard = () => {
       navigate('/', { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 빈 배열: 컴포넌트 마운트 시 한 번만 실행
+  }, []); // 컴포넌트 마운트 시 한 번만 실행
 
-  const loadPDFs = async () => {
+  const loadPDFs = useCallback(async () => {
     try {
       setLoading(true);
       const data = await fetchPDFs();
@@ -37,17 +38,18 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     clearAuth();
-    // replace: true로 설정하여 히스토리에 남기지 않음
-    navigate('/', { replace: true });
-  };
+    // 페이지 새로고침하여 App 컴포넌트의 user 상태를 초기화
+    window.location.href = '/';
+  }, []);
 
-  const handleFileUpload = async (file) => {
-    if (!file || file.type !== 'application/pdf') {
-      alert('PDF 파일만 업로드 가능합니다.');
+  const handleFileUpload = useCallback(async (file) => {
+    const validation = validatePDFFile(file);
+    if (!validation.valid) {
+      alert(validation.error);
       return;
     }
 
@@ -55,7 +57,6 @@ const Dashboard = () => {
       setUploading(true);
       const formData = new FormData();
       formData.append('pdf', file);
-      // userId는 백엔드에서 인증 토큰에서 추출
       formData.append('title', file.name);
 
       await uploadPDF(formData);
@@ -67,9 +68,9 @@ const Dashboard = () => {
     } finally {
       setUploading(false);
     }
-  };
+  }, [loadPDFs]);
 
-  const handleDrag = (e) => {
+  const handleDrag = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.type === 'dragenter' || e.type === 'dragover') {
@@ -77,9 +78,9 @@ const Dashboard = () => {
     } else if (e.type === 'dragleave') {
       setDragActive(false);
     }
-  };
+  }, []);
 
-  const handleDrop = (e) => {
+  const handleDrop = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
@@ -87,25 +88,16 @@ const Dashboard = () => {
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFileUpload(e.dataTransfer.files[0]);
     }
-  };
+  }, [handleFileUpload]);
 
-  const handleFileInput = (e) => {
+  const handleFileInput = useCallback((e) => {
     if (e.target.files && e.target.files[0]) {
       handleFileUpload(e.target.files[0]);
     }
-  };
+  }, [handleFileUpload]);
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
-
-  const handleDelete = async (e, pdfId) => {
-    e.stopPropagation(); // 카드 클릭 이벤트 방지
+  const handleDelete = useCallback(async (e, pdfId) => {
+    e.stopPropagation();
     
     if (!window.confirm('정말 이 PDF를 삭제하시겠습니까?')) {
       return;
@@ -119,7 +111,7 @@ const Dashboard = () => {
       console.error('삭제 에러:', error);
       alert('PDF 삭제에 실패했습니다.');
     }
-  };
+  }, [loadPDFs]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -161,7 +153,7 @@ const Dashboard = () => {
               dragActive
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                 : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-500'
-            } ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
+            } ${uploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}`}
           >
             <input
               type="file"
@@ -208,55 +200,60 @@ const Dashboard = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {pdfs.map((pdf) => (
-                <div
-                  key={pdf._id}
-                  className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border border-gray-200 dark:border-gray-700 relative"
-                >
-                  <div className="flex items-start gap-4">
-                    <FaFilePdf className="text-4xl text-red-500 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <h3 
-                          className="font-semibold text-gray-800 dark:text-white truncate cursor-pointer"
-                          onClick={() => navigate(`/viewer/${pdf._id}`)}
-                        >
-                          {pdf.title}
-                        </h3>
-                        <button
-                          onClick={(e) => handleDelete(e, pdf._id)}
-                          className="flex-shrink-0 p-2 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                          title="삭제"
-                        >
-                          <FaTrash className="text-sm" />
-                        </button>
-                      </div>
-                      <div 
-                        className="space-y-1 text-sm text-gray-600 dark:text-gray-300 cursor-pointer"
-                        onClick={() => navigate(`/viewer/${pdf._id}`)}
-                      >
-                        <p>총 페이지: {pdf.totalPage || 'N/A'}</p>
-                        <p>현재 페이지: {pdf.currentPage || 1}</p>
-                        <p>마지막 접근: {formatDate(pdf.lastAccessed)}</p>
-                      </div>
-                      <div 
-                        className="mt-3 cursor-pointer"
-                        onClick={() => navigate(`/viewer/${pdf._id}`)}
-                      >
-                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                          <div
-                            className="bg-blue-500 h-2 rounded-full transition-all"
-                            style={{ width: `${Math.min(100, Math.max(0, pdf.progress || 0))}%` }}
-                          ></div>
+              {pdfs.map((pdf) => {
+                const progress = Math.min(100, Math.max(0, pdf.progress || 0));
+                const handleCardClick = () => navigate(`/viewer/${pdf._id}`);
+                
+                return (
+                  <div
+                    key={pdf._id}
+                    className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border border-gray-200 dark:border-gray-700 relative"
+                  >
+                    <div className="flex items-start gap-4">
+                      <FaFilePdf className="text-4xl text-red-500 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <h3 
+                            className="font-semibold text-gray-800 dark:text-white truncate cursor-pointer"
+                            onClick={handleCardClick}
+                          >
+                            {pdf.title}
+                          </h3>
+                          <button
+                            onClick={(e) => handleDelete(e, pdf._id)}
+                            className="flex-shrink-0 p-2 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                            title="삭제"
+                          >
+                            <FaTrash className="text-sm" />
+                          </button>
                         </div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          진행률: {Math.round(pdf.progress || 0)}%
-                        </p>
+                        <div 
+                          className="space-y-1 text-sm text-gray-600 dark:text-gray-300 cursor-pointer"
+                          onClick={handleCardClick}
+                        >
+                          <p>총 페이지: {pdf.totalPage || 'N/A'}</p>
+                          <p>현재 페이지: {pdf.currentPage || 1}</p>
+                          <p>마지막 접근: {formatDate(pdf.lastAccessed)}</p>
+                        </div>
+                        <div 
+                          className="mt-3 cursor-pointer"
+                          onClick={handleCardClick}
+                        >
+                          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div
+                              className="bg-blue-500 h-2 rounded-full transition-all"
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            진행률: {Math.round(progress)}%
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

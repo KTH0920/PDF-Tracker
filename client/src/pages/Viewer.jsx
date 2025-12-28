@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { updateProgress, fetchPDFs } from '../api';
 import { getUser } from '../auth';
 import { FaArrowLeft, FaCheckCircle, FaSun, FaMoon } from 'react-icons/fa';
 import useDarkMode from '../hooks/useDarkMode';
+import { PROGRESS_UPDATE_INTERVAL, PROGRESS_UPDATE_THRESHOLD, DEFAULT_PAGE_WIDTH, PAGE_PADDING } from '../utils/constants';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
@@ -19,13 +20,36 @@ const Viewer = () => {
   const [numPages, setNumPages] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [progress, setProgress] = useState(0);
-  const [scrollProgress, setScrollProgress] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
   const [loading, setLoading] = useState(true);
   const containerRef = useRef(null);
   const lastUpdateTime = useRef(0);
   const updateTimeoutRef = useRef(null);
   const [isDark, toggleDarkMode] = useDarkMode();
+
+  const loadPDFInfo = useCallback(async () => {
+    try {
+      const data = await fetchPDFs();
+      const pdf = data.pdfs.find((p) => p._id === id);
+      if (pdf) {
+        console.log('PDF 정보 로드 성공:', pdf);
+        console.log('PDF 파일 경로:', pdf.filePath);
+        setPdfInfo(pdf);
+        setCurrentPage(pdf.currentPage || 1);
+        setProgress(pdf.progress || 0);
+        if (pdf.progress >= 100) {
+          setIsComplete(true);
+        }
+      } else {
+        console.error('PDF를 찾을 수 없습니다. ID:', id);
+      }
+    } catch (error) {
+      console.error('PDF 정보 로드 실패:', error);
+      alert('PDF 정보를 불러오는데 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
 
   useEffect(() => {
     const currentUser = getUser();
@@ -35,42 +59,21 @@ const Viewer = () => {
     } else {
       navigate('/', { replace: true });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 빈 배열: 컴포넌트 마운트 시 한 번만 실행
-
-  const loadPDFInfo = async () => {
-    try {
-      const data = await fetchPDFs();
-      const pdf = data.pdfs.find((p) => p._id === id);
-      if (pdf) {
-        setPdfInfo(pdf);
-        setCurrentPage(pdf.currentPage || 1);
-        setProgress(pdf.progress || 0);
-        if (pdf.progress >= 100) {
-          setIsComplete(true);
-        }
-      }
-    } catch (error) {
-      console.error('PDF 정보 로드 실패:', error);
-      alert('PDF 정보를 불러오는데 실패했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [navigate, loadPDFInfo]);
 
   const updateProgressToServer = useCallback(
     async (page, prog) => {
       if (!pdfInfo || !user) return;
 
       const now = Date.now();
-      // 최소 1초 간격으로 업데이트 (너무 자주 호출 방지)
-      if (now - lastUpdateTime.current < 1000) {
+      // 최소 간격으로 업데이트 (너무 자주 호출 방지)
+      if (now - lastUpdateTime.current < PROGRESS_UPDATE_INTERVAL) {
         if (updateTimeoutRef.current) {
           clearTimeout(updateTimeoutRef.current);
         }
         updateTimeoutRef.current = setTimeout(() => {
           updateProgressToServer(page, prog);
-        }, 1000 - (now - lastUpdateTime.current));
+        }, PROGRESS_UPDATE_INTERVAL - (now - lastUpdateTime.current));
         return;
       }
 
@@ -93,8 +96,6 @@ const Viewer = () => {
     const scrollHeight = container.scrollHeight - container.clientHeight;
     const scrollPercentage = scrollHeight > 0 ? (scrollTop / scrollHeight) * 100 : 0;
 
-    setScrollProgress(scrollPercentage);
-
     // 스크롤 위치를 기반으로 현재 페이지 계산
     const pageHeight = scrollHeight / numPages;
     const calculatedPage = Math.min(
@@ -109,7 +110,7 @@ const Viewer = () => {
     // 진행률 계산 (0~100)
     const calculatedProgress = Math.min(100, Math.max(0, scrollPercentage));
 
-    if (Math.abs(calculatedProgress - progress) > 1) {
+    if (Math.abs(calculatedProgress - progress) > PROGRESS_UPDATE_THRESHOLD) {
       setProgress(calculatedProgress);
 
       // 100% 달성 체크
@@ -126,7 +127,7 @@ const Viewer = () => {
   useEffect(() => {
     const container = containerRef.current;
     if (container) {
-      container.addEventListener('scroll', handleScroll);
+      container.addEventListener('scroll', handleScroll, { passive: true });
       return () => container.removeEventListener('scroll', handleScroll);
     }
   }, [handleScroll]);
@@ -140,18 +141,44 @@ const Viewer = () => {
     };
   }, [pdfInfo, user, currentPage, progress]);
 
-  const onDocumentLoadSuccess = ({ numPages }) => {
+  const onDocumentLoadSuccess = useCallback(({ numPages }) => {
+    console.log('PDF 문서 로드 성공, 페이지 수:', numPages);
     setNumPages(numPages);
     setLoading(false);
-  };
+  }, []);
 
-  const onDocumentLoadError = (error) => {
+  const onDocumentLoadError = useCallback((error) => {
     console.error('PDF 로드 에러:', error);
     console.error('에러 상세:', error.message);
-    console.error('PDF 경로:', pdfInfo?.filePath);
+    const filePath = pdfInfo?.filePath;
+    console.error('PDF 경로:', filePath);
     alert(`PDF 파일을 불러오는데 실패했습니다.\n에러: ${error.message || '알 수 없는 오류'}`);
     setLoading(false);
-  };
+  }, [pdfInfo]);
+
+  // 페이지 너비 계산 (useMemo로 최적화)
+  const pageWidth = useMemo(() => {
+    if (typeof window === 'undefined') return DEFAULT_PAGE_WIDTH;
+    return Math.min(DEFAULT_PAGE_WIDTH, window.innerWidth - PAGE_PADDING);
+  }, []);
+
+  // PDF 파일 경로 정규화 (기존 잘못된 URL 수정)
+  const normalizedFilePath = useMemo(() => {
+    if (!pdfInfo?.filePath) return null;
+    // 5000uploads -> 5000/uploads로 수정
+    let path = pdfInfo.filePath.replace(/5000uploads/g, '5000/uploads');
+    // 중복 슬래시 제거 및 프로토콜 복구
+    path = path.replace(/\/\/+/g, '/').replace(/:\/(?!\/)/, '://');
+    console.log('정규화된 PDF 경로:', path);
+    return path;
+  }, [pdfInfo?.filePath]);
+
+  // PDF.js 옵션 메모이제이션 (불필요한 리렌더링 방지)
+  const pdfOptions = useMemo(() => ({
+    cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
+    cMapPacked: true,
+    standardFontDataUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/standard_fonts/`,
+  }), []);
 
 
   if (loading && !pdfInfo) {
@@ -241,27 +268,35 @@ const Viewer = () => {
         style={{ maxHeight: 'calc(100vh - 120px)' }}
       >
         <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-4">
-          <Document
-            file={pdfInfo.filePath}
-            onLoadSuccess={onDocumentLoadSuccess}
-            onLoadError={onDocumentLoadError}
-            loading={
-              <div className="flex justify-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-              </div>
-            }
-          >
-            {Array.from(new Array(numPages), (el, index) => (
-              <Page
-                key={`page_${index + 1}`}
-                pageNumber={index + 1}
-                renderTextLayer={true}
-                renderAnnotationLayer={true}
-                className="mb-4"
-                width={Math.min(800, window.innerWidth - 64)}
-              />
-            ))}
-          </Document>
+          {normalizedFilePath ? (
+            <Document
+              file={normalizedFilePath}
+              onLoadSuccess={onDocumentLoadSuccess}
+              onLoadError={onDocumentLoadError}
+              loading={
+                <div className="flex justify-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                </div>
+              }
+              options={pdfOptions}
+            >
+              {/* numPages state가 설정된 후에만 Page 렌더링 (Document 완전 로드 후) */}
+              {numPages && numPages > 0 && Array.from({ length: numPages }, (_, index) => (
+                <Page
+                  key={`page_${index + 1}`}
+                  pageNumber={index + 1}
+                  renderTextLayer={true}
+                  renderAnnotationLayer={true}
+                  className="mb-4"
+                  width={pageWidth}
+                />
+              ))}
+            </Document>
+          ) : (
+            <div className="flex justify-center py-12">
+              <p className="text-gray-600 dark:text-gray-300">PDF 파일 경로가 없습니다.</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useGoogleLogin } from '@react-oauth/google';
 import { setAuth } from '../auth';
 import { FaGoogle } from 'react-icons/fa';
+import { API_BASE_URL } from '../utils/constants';
 
 const Login = () => {
   const [loading, setLoading] = useState(false);
@@ -14,7 +15,7 @@ const Login = () => {
       try {
         setLoading(true);
         // Authorization Code를 백엔드로 전송하여 검증 및 JWT 발급
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/google`, {
+        const response = await fetch(`${API_BASE_URL}/api/auth/google`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ code: codeResponse.code })
@@ -22,15 +23,23 @@ const Login = () => {
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || '인증 실패');
+          const errorMessage = errorData.details || errorData.error || '인증 실패';
+          console.error('서버 응답 에러:', {
+            status: response.status,
+            statusText: response.statusText,
+            errorData
+          });
+          throw new Error(errorMessage);
         }
 
         const data = await response.json();
         // JWT 토큰과 사용자 정보를 localStorage에 저장
         setAuth(data.token, data.user);
         
-        // 대시보드로 이동
-        navigate('/dashboard');
+        console.log('로그인 성공, 사용자 정보 저장됨:', data.user);
+        
+        // 대시보드로 이동 - 페이지 새로고침으로 App 컴포넌트의 user 상태 업데이트
+        window.location.href = '/dashboard';
       } catch (error) {
         console.error('로그인 에러:', error);
         alert(`로그인에 실패했습니다: ${error.message}`);
