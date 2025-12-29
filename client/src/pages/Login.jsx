@@ -4,9 +4,11 @@ import { useGoogleLogin } from '@react-oauth/google';
 import { setAuth } from '../auth';
 import { FaGoogle } from 'react-icons/fa';
 import { API_BASE_URL } from '../utils/constants';
+import Toast from '../components/Toast';
 
 const Login = () => {
   const [loading, setLoading] = useState(false);
+  const [showToast, setShowToast] = useState(false);
   const navigate = useNavigate();
 
   const login = useGoogleLogin({
@@ -38,8 +40,13 @@ const Login = () => {
         
         console.log('로그인 성공, 사용자 정보 저장됨:', data.user);
         
-        // 대시보드로 이동 - 페이지 새로고침으로 App 컴포넌트의 user 상태 업데이트
-        window.location.href = '/dashboard';
+        // 성공 팝업 표시
+        setShowToast(true);
+        
+        // 팝업 표시 후 대시보드로 이동
+        setTimeout(() => {
+          window.location.href = '/dashboard';
+        }, 1500);
       } catch (error) {
         console.error('로그인 에러:', error);
         alert(`로그인에 실패했습니다: ${error.message}`);
@@ -89,6 +96,15 @@ const Login = () => {
           <p>Google 계정으로 간편하게 시작하세요</p>
         </div>
       </div>
+      
+      {showToast && (
+        <Toast
+          message="로그인에 성공했습니다!"
+          type="success"
+          duration={1500}
+          onClose={() => setShowToast(false)}
+        />
+      )}
     </div>
   );
 };

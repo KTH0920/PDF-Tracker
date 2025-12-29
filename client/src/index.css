@@ -2,27 +2,49 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 목차 사이드바 다크 모드 스타일 */
-.dark .react-pdf__Outline {
-  color: #e5e7eb;
+/* Toast 애니메이션 */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
-.dark .react-pdf__Outline__item {
-  color: #d1d5db;
+@keyframes fade-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
 }
 
-.dark .react-pdf__Outline__item:hover {
-  background-color: #374151;
-  color: #ffffff;
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
 }
 
-.react-pdf__Outline__item {
-  padding: 0.5rem;
-  cursor: pointer;
-  border-radius: 0.25rem;
-  transition: background-color 0.2s;
+.animate-fade-out {
+  animation: fade-out 0.3s ease-out;
 }
 
-.react-pdf__Outline__item:hover {
-  background-color: #f3f4f6;
+/* 모달 애니메이션 */
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-modal-in {
+  animation: modal-in 0.2s ease-out;
 }

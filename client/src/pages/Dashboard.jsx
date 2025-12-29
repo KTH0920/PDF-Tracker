@@ -6,6 +6,8 @@ import { FaSignOutAlt, FaUpload, FaFilePdf, FaSpinner, FaTrash, FaSun, FaMoon } 
 import useDarkMode from '../hooks/useDarkMode';
 import { formatDate } from '../utils/dateUtils';
 import { validatePDFFile } from '../utils/validation';
+import Toast from '../components/Toast';
+import ConfirmModal from '../components/ConfirmModal';
 
 const Dashboard = () => {
   const [user, setUser] = useState(null);
@@ -13,6 +15,12 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [showUploadToast, setShowUploadToast] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
+  const [deleteTargetTitle, setDeleteTargetTitle] = useState(null);
+  const [showDeleteToast, setShowDeleteToast] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const navigate = useNavigate();
   const [isDark, toggleDarkMode] = useDarkMode();
 
@@ -40,9 +48,12 @@ const Dashboard = () => {
     }
   }, []);
 
-  const handleLogout = useCallback(() => {
+  const handleLogoutClick = useCallback(() => {
+    setShowLogoutModal(true);
+  }, []);
+
+  const handleLogoutConfirm = useCallback(() => {
     clearAuth();
-    // 페이지 새로고침하여 App 컴포넌트의 user 상태를 초기화
     window.location.href = '/';
   }, []);
 
@@ -61,7 +72,8 @@ const Dashboard = () => {
 
       await uploadPDF(formData);
       await loadPDFs();
-      alert('파일 업로드가 완료되었습니다!');
+      // 업로드 성공 팝업 표시
+      setShowUploadToast(true);
     } catch (error) {
       console.error('업로드 에러:', error);
       alert('파일 업로드에 실패했습니다.');
@@ -96,22 +108,28 @@ const Dashboard = () => {
     }
   }, [handleFileUpload]);
 
-  const handleDelete = useCallback(async (e, pdfId) => {
+  const handleDeleteClick = useCallback((e, pdfId, pdfTitle) => {
     e.stopPropagation();
-    
-    if (!window.confirm('정말 이 PDF를 삭제하시겠습니까?')) {
-      return;
-    }
+    setDeleteTargetId(pdfId);
+    setDeleteTargetTitle(pdfTitle);
+    setShowDeleteModal(true);
+  }, []);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteTargetId) return;
 
     try {
-      await deletePDF(pdfId);
+      await deletePDF(deleteTargetId);
       await loadPDFs();
-      alert('PDF가 삭제되었습니다.');
+      setShowDeleteToast(true);
     } catch (error) {
       console.error('삭제 에러:', error);
       alert('PDF 삭제에 실패했습니다.');
+    } finally {
+      setDeleteTargetId(null);
+      setDeleteTargetTitle(null);
     }
-  }, [loadPDFs]);
+  }, [deleteTargetId, loadPDFs]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -131,7 +149,7 @@ const Dashboard = () => {
             </button>
             <span className="text-sm text-gray-600 dark:text-gray-300">{user?.email}</span>
             <button
-              onClick={handleLogout}
+              onClick={handleLogoutClick}
               className="flex items-center gap-2 px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
             >
               <FaSignOutAlt />
@@ -220,7 +238,7 @@ const Dashboard = () => {
                             {pdf.title}
                           </h3>
                           <button
-                            onClick={(e) => handleDelete(e, pdf._id)}
+                            onClick={(e) => handleDeleteClick(e, pdf._id, pdf.title)}
                             className="flex-shrink-0 p-2 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                             title="삭제"
                           >
@@ -258,6 +276,54 @@ const Dashboard = () => {
           )}
         </div>
       </main>
+      
+      {/* 팝업 알림 */}
+      {showUploadToast && (
+        <Toast
+          message="파일 업로드가 완료되었습니다!"
+          type="success"
+          duration={3000}
+          onClose={() => setShowUploadToast(false)}
+        />
+      )}
+      
+      {showDeleteToast && (
+        <Toast
+          message="PDF가 삭제되었습니다."
+          type="success"
+          duration={3000}
+          onClose={() => setShowDeleteToast(false)}
+        />
+      )}
+
+      {/* 삭제 확인 모달 */}
+      <ConfirmModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setDeleteTargetId(null);
+          setDeleteTargetTitle(null);
+        }}
+        onConfirm={handleDeleteConfirm}
+        title="PDF 삭제"
+        message="정말 이 PDF를 삭제하시겠습니까?"
+        pdfTitle={deleteTargetTitle}
+        confirmText="삭제"
+        cancelText="취소"
+        type="danger"
+      />
+
+      {/* 로그아웃 확인 모달 */}
+      <ConfirmModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={handleLogoutConfirm}
+        title="로그아웃"
+        message="정말 로그아웃 하시겠습니까?"
+        confirmText="로그아웃"
+        cancelText="취소"
+        type="danger"
+      />
     </div>
   );
 };
