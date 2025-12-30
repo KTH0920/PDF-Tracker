@@ -48,3 +48,48 @@
 .animate-modal-in {
   animation: modal-in 0.2s ease-out;
 }
+
+/* 커스텀 스크롤바 스타일 */
+/* Webkit 브라우저 (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: #2d3748;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 10px;
+  border: 2px solid #f1f1f1;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #4a5568;
+  border: 2px solid #2d3748;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #718096;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 #f1f1f1;
+}
+
+.dark * {
+  scrollbar-color: #4a5568 #2d3748;
+}

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { updateProgress, fetchPDFs } from '../api';
 import { getUser } from '../auth';
-import { FaArrowLeft, FaCheckCircle, FaSun, FaMoon } from 'react-icons/fa';
+import { FaArrowLeft, FaCheckCircle, FaSun, FaMoon, FaBars, FaTimes } from 'react-icons/fa';
 import useDarkMode from '../hooks/useDarkMode';
 import { PROGRESS_UPDATE_INTERVAL, PROGRESS_UPDATE_THRESHOLD, DEFAULT_PAGE_WIDTH, PAGE_PADDING } from '../utils/constants';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -26,6 +26,11 @@ const Viewer = () => {
   const lastUpdateTime = useRef(0);
   const updateTimeoutRef = useRef(null);
   const [isDark, toggleDarkMode] = useDarkMode();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const pageRefs = useRef({});
+  const headerRef = useRef(null);
+  const [headerHeight, setHeaderHeight] = useState(120);
+  const isScrollingRef = useRef(false);
 
   const loadPDFInfo = useCallback(async () => {
     try {
@@ -90,18 +95,42 @@ const Viewer = () => {
 
   const handleScroll = useCallback(() => {
     if (!containerRef.current || !numPages) return;
+    
+    // 프로그래밍 방식 스크롤 중이면 페이지 감지 건너뛰기
+    if (isScrollingRef.current) return;
 
     const container = containerRef.current;
     const scrollTop = container.scrollTop;
     const scrollHeight = container.scrollHeight - container.clientHeight;
     const scrollPercentage = scrollHeight > 0 ? (scrollTop / scrollHeight) * 100 : 0;
 
-    // 스크롤 위치를 기반으로 현재 페이지 계산
-    const pageHeight = scrollHeight / numPages;
-    const calculatedPage = Math.min(
-      Math.max(1, Math.floor(scrollTop / pageHeight) + 1),
-      numPages
-    );
+    // 각 페이지 요소의 위치를 확인하여 현재 페이지 계산
+    let calculatedPage = 1;
+    let minDistance = Infinity;
+    
+    for (let i = 1; i <= numPages; i++) {
+      const pageElement = pageRefs.current[i];
+      if (pageElement) {
+        const pageTop = pageElement.offsetTop - container.offsetTop;
+        const pageBottom = pageTop + pageElement.offsetHeight;
+        const pageCenter = pageTop + pageElement.offsetHeight / 2;
+        
+        // 뷰포트 중앙에 가장 가까운 페이지 찾기
+        const viewportCenter = scrollTop + container.clientHeight / 2;
+        const distance = Math.abs(viewportCenter - pageCenter);
+        
+        if (distance < minDistance) {
+          minDistance = distance;
+          calculatedPage = i;
+        }
+        
+        // 스크롤 위치가 페이지 범위 내에 있으면 해당 페이지로 설정
+        if (scrollTop >= pageTop - 50 && scrollTop < pageBottom) {
+          calculatedPage = i;
+          break;
+        }
+      }
+    }
 
     if (calculatedPage !== currentPage) {
       setCurrentPage(calculatedPage);
@@ -124,6 +153,56 @@ const Viewer = () => {
     }
   }, [numPages, currentPage, progress, isComplete, updateProgressToServer]);
 
+  // 페이지로 스크롤 이동
+  const scrollToPage = useCallback((pageNumber) => {
+    const pageElement = pageRefs.current[pageNumber];
+    if (pageElement && containerRef.current) {
+      const container = containerRef.current;
+      const pageTop = pageElement.offsetTop - container.offsetTop;
+      
+      // 즉시 현재 페이지 업데이트
+      setCurrentPage(pageNumber);
+      
+      // 프로그래밍 방식 스크롤 시작
+      isScrollingRef.current = true;
+      
+      container.scrollTo({
+        top: pageTop - 20, // 약간의 여백
+        behavior: 'smooth',
+      });
+      
+      // 스크롤 애니메이션이 완료될 때까지 대기 (약 500ms)
+      setTimeout(() => {
+        isScrollingRef.current = false;
+        // 스크롤 완료 후 정확한 페이지 다시 계산
+        if (containerRef.current) {
+          const finalScrollTop = containerRef.current.scrollTop;
+          const container = containerRef.current;
+          
+          let calculatedPage = 1;
+          let minDistance = Infinity;
+          
+          for (let i = 1; i <= numPages; i++) {
+            const pageEl = pageRefs.current[i];
+            if (pageEl) {
+              const pageTop = pageEl.offsetTop - container.offsetTop;
+              const pageCenter = pageTop + pageEl.offsetHeight / 2;
+              const viewportCenter = finalScrollTop + container.clientHeight / 2;
+              const distance = Math.abs(viewportCenter - pageCenter);
+              
+              if (distance < minDistance) {
+                minDistance = distance;
+                calculatedPage = i;
+              }
+            }
+          }
+          
+          setCurrentPage(calculatedPage);
+        }
+      }, 600); // smooth 스크롤 애니메이션 시간보다 약간 길게
+    }
+  }, [numPages]);
+
   useEffect(() => {
     const container = containerRef.current;
     if (container) {
@@ -131,6 +210,28 @@ const Viewer = () => {
       return () => container.removeEventListener('scroll', handleScroll);
     }
   }, [handleScroll]);
+
+  // 헤더 높이 측정 (border 포함)
+  useEffect(() => {
+    const updateHeaderHeight = () => {
+      if (headerRef.current) {
+        const rect = headerRef.current.getBoundingClientRect();
+        setHeaderHeight(rect.height);
+      }
+    };
+    
+    // 초기 측정
+    updateHeaderHeight();
+    
+    // 약간의 지연 후 재측정 (렌더링 완료 후)
+    const timeoutId = setTimeout(updateHeaderHeight, 100);
+    
+    window.addEventListener('resize', updateHeaderHeight);
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('resize', updateHeaderHeight);
+    };
+  }, []);
 
   // 컴포넌트 언마운트 시 최종 진행률 저장
   useEffect(() => {
@@ -209,12 +310,21 @@ const Viewer = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       {/* Sticky Progress Bar */}
-      <div className="sticky top-0 z-50 bg-white dark:bg-gray-800 shadow-md border-b dark:border-gray-700">
+      <div ref={headerRef} className="sticky top-0 z-50 bg-white dark:bg-gray-800 shadow-md border-b dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-4">
+              {!sidebarOpen && (
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  title="페이지 목록 열기"
+                >
+                  <FaBars className="text-lg" />
+                </button>
+              )}
               <button
                 onClick={() => navigate('/dashboard')}
                 className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white"
@@ -261,42 +371,122 @@ const Viewer = () => {
         </div>
       </div>
 
-      {/* PDF 뷰어 */}
-      <div
-        ref={containerRef}
-        className="max-w-4xl mx-auto px-4 py-8 overflow-y-auto"
-        style={{ maxHeight: 'calc(100vh - 120px)' }}
-      >
-        <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-4">
-          {normalizedFilePath ? (
-            <Document
-              file={normalizedFilePath}
-              onLoadSuccess={onDocumentLoadSuccess}
-              onLoadError={onDocumentLoadError}
-              loading={
-                <div className="flex justify-center py-12">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-                </div>
-              }
-              options={pdfOptions}
-            >
-              {/* numPages state가 설정된 후에만 Page 렌더링 (Document 완전 로드 후) */}
-              {numPages && numPages > 0 && Array.from({ length: numPages }, (_, index) => (
-                <Page
-                  key={`page_${index + 1}`}
-                  pageNumber={index + 1}
-                  renderTextLayer={true}
-                  renderAnnotationLayer={true}
-                  className="mb-4"
-                  width={pageWidth}
-                />
-              ))}
-            </Document>
-          ) : (
-            <div className="flex justify-center py-12">
-              <p className="text-gray-600 dark:text-gray-300">PDF 파일 경로가 없습니다.</p>
+      {/* 메인 컨텐츠 영역 (사이드바 + PDF 뷰어) */}
+      <div className="flex flex-1 relative">
+        {/* 페이지 썸네일 사이드바 */}
+        <div
+          className={`fixed left-0 bg-white dark:bg-gray-800 shadow-lg border-r dark:border-gray-700 z-40 transition-transform duration-300 overflow-y-auto ${
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+          style={{ 
+            width: '240px',
+            top: `${headerHeight}px`, // 헤더 높이만큼 아래로
+            height: `calc(100vh - ${headerHeight}px)` // 헤더 높이 제외
+          }}
+        >
+          <div className="p-3 sticky top-0 bg-white dark:bg-gray-800 border-b dark:border-gray-700 z-10">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-white">페이지</h3>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="p-1 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                <FaTimes className="text-sm" />
+              </button>
             </div>
-          )}
+          </div>
+          <div className="p-2">
+            {normalizedFilePath && numPages && numPages > 0 ? (
+              <Document
+                file={normalizedFilePath}
+                loading={
+                  <div className="flex justify-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                  </div>
+                }
+                options={pdfOptions}
+              >
+                {Array.from({ length: numPages }, (_, index) => {
+                  const pageNum = index + 1;
+                  return (
+                    <div
+                      key={`thumbnail_${pageNum}`}
+                      onClick={() => scrollToPage(pageNum)}
+                      className={`mb-2 p-2 rounded cursor-pointer transition-all ${
+                        currentPage === pageNum
+                          ? 'bg-blue-100 dark:bg-blue-900 border-2 border-blue-500 dark:border-blue-400'
+                          : 'bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      <Page
+                        pageNumber={pageNum}
+                        renderTextLayer={false}
+                        renderAnnotationLayer={false}
+                        width={200}
+                        className="shadow-sm"
+                      />
+                      <div className="text-xs text-center mt-1 text-gray-600 dark:text-gray-300 font-medium">
+                        {pageNum}
+                      </div>
+                    </div>
+                  );
+                })}
+              </Document>
+            ) : (
+              <div className="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">
+                페이지 로딩 중...
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* PDF 뷰어 영역 */}
+        <div className={`flex-1 transition-all duration-300 ${sidebarOpen ? 'ml-[240px]' : 'ml-0'}`}>
+          {/* PDF 뷰어 */}
+          <div
+            ref={containerRef}
+            className="max-w-4xl mx-auto px-4 py-8 overflow-y-auto"
+            style={{ maxHeight: 'calc(100vh - 120px)' }}
+          >
+            <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-4">
+              {normalizedFilePath ? (
+                <Document
+                  file={normalizedFilePath}
+                  onLoadSuccess={onDocumentLoadSuccess}
+                  onLoadError={onDocumentLoadError}
+                  loading={
+                    <div className="flex justify-center py-12">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                    </div>
+                  }
+                  options={pdfOptions}
+                >
+                  {/* numPages state가 설정된 후에만 Page 렌더링 (Document 완전 로드 후) */}
+                  {numPages && numPages > 0 && Array.from({ length: numPages }, (_, index) => (
+                    <div
+                      key={`page_wrapper_${index + 1}`}
+                      ref={(el) => {
+                        pageRefs.current[index + 1] = el;
+                      }}
+                    >
+                      <Page
+                        key={`page_${index + 1}`}
+                        pageNumber={index + 1}
+                        renderTextLayer={true}
+                        renderAnnotationLayer={true}
+                        className="mb-4"
+                        width={pageWidth}
+                      />
+                    </div>
+                  ))}
+                </Document>
+              ) : (
+                <div className="flex justify-center py-12">
+                  <p className="text-gray-600 dark:text-gray-300">PDF 파일 경로가 없습니다.</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
