@@ -93,3 +93,44 @@
 .dark * {
   scrollbar-color: #4a5568 #2d3748;
 }
+
+/* Number Input 스피너 커스터마이징 */
+/* Webkit 브라우저 (Chrome, Safari, Edge) */
+input[type="number"]::-webkit-inner-spin-button {
+  opacity: 1;
+  height: 20px;
+  width: 16px;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  margin: 2px;
+  background-image: 
+    linear-gradient(to bottom, transparent 30%, #6b7280 30%, #6b7280 50%, transparent 50%),
+    linear-gradient(to top, transparent 30%, #6b7280 30%, #6b7280 50%, transparent 50%);
+  background-size: 10px 5px, 10px 5px;
+  background-position: center 20%, center 80%;
+  background-repeat: no-repeat;
+  border-radius: 2px;
+}
+
+.dark input[type="number"]::-webkit-inner-spin-button {
+  background-image: 
+    linear-gradient(to bottom, transparent 30%, #9ca3af 30%, #9ca3af 50%, transparent 50%),
+    linear-gradient(to top, transparent 30%, #9ca3af 30%, #9ca3af 50%, transparent 50%);
+}
+
+input[type="number"]::-webkit-inner-spin-button:hover {
+  background-image: 
+    linear-gradient(to bottom, transparent 30%, #3b82f6 30%, #3b82f6 50%, transparent 50%),
+    linear-gradient(to top, transparent 30%, #3b82f6 30%, #3b82f6 50%, transparent 50%);
+}
+
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Firefox */
+input[type="number"] {
+  -moz-appearance: textfield;
+}

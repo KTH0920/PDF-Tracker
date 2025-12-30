@@ -3,9 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { updateProgress, fetchPDFs } from '../api';
 import { getUser } from '../auth';
-import { FaArrowLeft, FaCheckCircle, FaSun, FaMoon, FaBars, FaTimes } from 'react-icons/fa';
+import { FaArrowLeft, FaCheckCircle, FaSun, FaMoon, FaBars, FaTimes, FaSearch, FaChevronUp, FaChevronDown } from 'react-icons/fa';
 import useDarkMode from '../hooks/useDarkMode';
 import { PROGRESS_UPDATE_INTERVAL, PROGRESS_UPDATE_THRESHOLD, DEFAULT_PAGE_WIDTH, PAGE_PADDING } from '../utils/constants';
+import ResumeModal from '../components/ResumeModal';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
@@ -31,6 +32,12 @@ const Viewer = () => {
   const headerRef = useRef(null);
   const [headerHeight, setHeaderHeight] = useState(120);
   const isScrollingRef = useRef(false);
+  const [showResumeModal, setShowResumeModal] = useState(false);
+  const savedPageRef = useRef(null);
+  const savedProgressRef = useRef(null);
+  const sidebarRef = useRef(null);
+  const thumbnailRefs = useRef({});
+  const [pageSearchValue, setPageSearchValue] = useState('');
 
   const loadPDFInfo = useCallback(async () => {
     try {
@@ -40,10 +47,23 @@ const Viewer = () => {
         console.log('PDF 정보 로드 성공:', pdf);
         console.log('PDF 파일 경로:', pdf.filePath);
         setPdfInfo(pdf);
-        setCurrentPage(pdf.currentPage || 1);
-        setProgress(pdf.progress || 0);
-        if (pdf.progress >= 100) {
-          setIsComplete(true);
+        
+        const savedPage = pdf.currentPage || 1;
+        const savedProgress = pdf.progress || 0;
+        
+        savedPageRef.current = savedPage;
+        savedProgressRef.current = savedProgress;
+        
+        // 진행률이 0보다 크고 100%가 아니면 재개 모달 표시
+        if (savedProgress > 0 && savedProgress < 100) {
+          setShowResumeModal(true);
+          // 모달이 표시되는 동안은 진행률을 설정하지 않음
+        } else {
+          setCurrentPage(savedPage);
+          setProgress(savedProgress);
+          if (savedProgress >= 100) {
+            setIsComplete(true);
+          }
         }
       } else {
         console.error('PDF를 찾을 수 없습니다. ID:', id);
@@ -153,12 +173,43 @@ const Viewer = () => {
     }
   }, [numPages, currentPage, progress, isComplete, updateProgressToServer]);
 
+  // 사이드바 썸네일로 스크롤
+  const scrollToThumbnail = useCallback((pageNumber) => {
+    // 약간의 지연을 두어 DOM 업데이트 완료 후 실행
+    setTimeout(() => {
+      const thumbnailElement = thumbnailRefs.current[pageNumber];
+      const sidebar = sidebarRef.current;
+      
+      if (thumbnailElement && sidebar) {
+        // 썸네일의 실제 위치 계산 (부모 요소 기준)
+        const thumbnailRect = thumbnailElement.getBoundingClientRect();
+        const sidebarRect = sidebar.getBoundingClientRect();
+        const relativeTop = thumbnailRect.top - sidebarRect.top + sidebar.scrollTop;
+        
+        const sidebarHeight = sidebar.clientHeight;
+        const thumbnailHeight = thumbnailElement.offsetHeight;
+        
+        // 썸네일이 뷰포트 중앙에 오도록 스크롤
+        const scrollPosition = relativeTop - (sidebarHeight / 2) + (thumbnailHeight / 2);
+        
+        sidebar.scrollTo({
+          top: Math.max(0, scrollPosition),
+          behavior: 'smooth',
+        });
+      }
+    }, 100);
+  }, []);
+
   // 페이지로 스크롤 이동
   const scrollToPage = useCallback((pageNumber) => {
     const pageElement = pageRefs.current[pageNumber];
     if (pageElement && containerRef.current) {
       const container = containerRef.current;
-      const pageTop = pageElement.offsetTop - container.offsetTop;
+      
+      // 페이지 요소의 정확한 위치 계산
+      const pageRect = pageElement.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      const relativeTop = pageRect.top - containerRect.top + container.scrollTop;
       
       // 즉시 현재 페이지 업데이트
       setCurrentPage(pageNumber);
@@ -167,41 +218,26 @@ const Viewer = () => {
       isScrollingRef.current = true;
       
       container.scrollTo({
-        top: pageTop - 20, // 약간의 여백
+        top: relativeTop - 20, // 약간의 여백
         behavior: 'smooth',
       });
       
-      // 스크롤 애니메이션이 완료될 때까지 대기 (약 500ms)
+      // 사이드바 썸네일도 스크롤 (약간의 지연을 두어 PDF 스크롤과 동기화)
       setTimeout(() => {
-        isScrollingRef.current = false;
-        // 스크롤 완료 후 정확한 페이지 다시 계산
-        if (containerRef.current) {
-          const finalScrollTop = containerRef.current.scrollTop;
-          const container = containerRef.current;
-          
-          let calculatedPage = 1;
-          let minDistance = Infinity;
-          
-          for (let i = 1; i <= numPages; i++) {
-            const pageEl = pageRefs.current[i];
-            if (pageEl) {
-              const pageTop = pageEl.offsetTop - container.offsetTop;
-              const pageCenter = pageTop + pageEl.offsetHeight / 2;
-              const viewportCenter = finalScrollTop + container.clientHeight / 2;
-              const distance = Math.abs(viewportCenter - pageCenter);
-              
-              if (distance < minDistance) {
-                minDistance = distance;
-                calculatedPage = i;
-              }
-            }
-          }
-          
-          setCurrentPage(calculatedPage);
-        }
+        scrollToThumbnail(pageNumber);
+      }, 150);
+      
+      // 스크롤 애니메이션이 완료될 때까지 대기
+      setTimeout(() => {
+        // 프로그래밍 방식 스크롤이므로 입력받은 페이지 번호 유지
+        setCurrentPage(pageNumber);
+        // 추가 지연 후 스크롤 플래그 해제 (handleScroll이 잘못된 페이지를 계산하지 않도록)
+        setTimeout(() => {
+          isScrollingRef.current = false;
+        }, 200);
       }, 600); // smooth 스크롤 애니메이션 시간보다 약간 길게
     }
-  }, [numPages]);
+  }, [numPages, scrollToThumbnail]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -242,6 +278,29 @@ const Viewer = () => {
     };
   }, [pdfInfo, user, currentPage, progress]);
 
+  // PDF 로드 완료 후 마지막 위치로 스크롤 (재개 모달이 닫힌 후, 마지막 위치에서 시작 선택 시)
+  useEffect(() => {
+    if (!showResumeModal && numPages && savedPageRef.current && savedProgressRef.current > 0 && progress === savedProgressRef.current) {
+      // 재개 모달이 닫히고 PDF가 로드된 후 마지막 위치로 스크롤 (진행률이 저장된 값과 같을 때만)
+      setTimeout(() => {
+        if (pageRefs.current[savedPageRef.current]) {
+          scrollToPage(savedPageRef.current);
+        }
+      }, 500);
+    }
+  }, [showResumeModal, numPages, scrollToPage, progress]);
+
+  // 현재 페이지가 변경될 때 사이드바 썸네일 스크롤
+  useEffect(() => {
+    if (currentPage && sidebarOpen) {
+      // 약간의 지연을 두어 페이지 변경이 완료된 후 스크롤
+      const timeoutId = setTimeout(() => {
+        scrollToThumbnail(currentPage);
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [currentPage, sidebarOpen, scrollToThumbnail]);
+
   const onDocumentLoadSuccess = useCallback(({ numPages }) => {
     console.log('PDF 문서 로드 성공, 페이지 수:', numPages);
     setNumPages(numPages);
@@ -280,6 +339,73 @@ const Viewer = () => {
     cMapPacked: true,
     standardFontDataUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/standard_fonts/`,
   }), []);
+
+  // 페이지 검색 핸들러
+  const handlePageSearch = useCallback((e) => {
+    e.preventDefault();
+    const pageNum = parseInt(pageSearchValue, 10);
+    
+    if (isNaN(pageNum) || pageNum < 1 || (numPages && pageNum > numPages)) {
+      alert(`유효한 페이지 번호를 입력해주세요. (1 ~ ${numPages || '?'})`);
+      setPageSearchValue('');
+      return;
+    }
+    
+    scrollToPage(pageNum);
+    setPageSearchValue('');
+  }, [pageSearchValue, numPages, scrollToPage]);
+
+  // 페이지 증가
+  const handlePageIncrement = useCallback(() => {
+    const current = parseInt(pageSearchValue, 10) || 1;
+    const next = Math.min(current + 1, numPages || 1);
+    setPageSearchValue(next.toString());
+  }, [pageSearchValue, numPages]);
+
+  // 페이지 감소
+  const handlePageDecrement = useCallback(() => {
+    const current = parseInt(pageSearchValue, 10) || 1;
+    const prev = Math.max(current - 1, 1);
+    setPageSearchValue(prev.toString());
+  }, [pageSearchValue]);
+
+  // 마지막 위치에서 재개
+  const handleResume = useCallback(() => {
+    setShowResumeModal(false);
+    if (savedPageRef.current && savedProgressRef.current !== null) {
+      setCurrentPage(savedPageRef.current);
+      setProgress(savedProgressRef.current);
+      // 스크롤은 useEffect에서 처리
+    }
+  }, []);
+
+  // 처음부터 시작
+  const handleRestart = useCallback(async () => {
+    setShowResumeModal(false);
+    setCurrentPage(1);
+    setProgress(0);
+    setIsComplete(false);
+    
+    // 저장된 위치 정보 초기화 (useEffect에서 마지막 위치로 스크롤하지 않도록)
+    savedPageRef.current = null;
+    savedProgressRef.current = null;
+    
+    // 서버에 진행률 초기화
+    if (pdfInfo) {
+      try {
+        await updateProgress(pdfInfo._id, 1, 0);
+      } catch (error) {
+        console.error('진행률 초기화 실패:', error);
+      }
+    }
+    
+    // 1페이지로 스크롤
+    if (numPages && numPages > 0) {
+      setTimeout(() => {
+        scrollToPage(1);
+      }, 100);
+    }
+  }, [pdfInfo, numPages, scrollToPage]);
 
 
   if (loading && !pdfInfo) {
@@ -337,6 +463,52 @@ const Viewer = () => {
               </h2>
             </div>
             <div className="flex items-center gap-4">
+              {/* 페이지 검색창 */}
+              <form onSubmit={handlePageSearch} className="flex items-center gap-2">
+                <div className="relative">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={pageSearchValue}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // 숫자만 입력 허용
+                      if (value === '' || /^\d+$/.test(value)) {
+                        setPageSearchValue(value);
+                      }
+                    }}
+                    placeholder="페이지 번호"
+                    className="w-40 px-3 py-1.5 pl-8 pr-10 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                  />
+                  <FaSearch className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 text-xs" />
+                  {/* 커스텀 스피너 버튼 */}
+                  <div className="absolute right-1 top-1/2 transform -translate-y-1/2 flex flex-col">
+                    <button
+                      type="button"
+                      onClick={handlePageIncrement}
+                      className="p-0.5 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                      disabled={!numPages || parseInt(pageSearchValue, 10) >= (numPages || 1)}
+                    >
+                      <FaChevronUp className="text-xs" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePageDecrement}
+                      className="p-0.5 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                      disabled={parseInt(pageSearchValue, 10) <= 1}
+                    >
+                      <FaChevronDown className="text-xs" />
+                    </button>
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-lg transition-colors"
+                >
+                  이동
+                </button>
+              </form>
               <button
                 onClick={toggleDarkMode}
                 className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -375,6 +547,7 @@ const Viewer = () => {
       <div className="flex flex-1 relative">
         {/* 페이지 썸네일 사이드바 */}
         <div
+          ref={sidebarRef}
           className={`fixed left-0 bg-white dark:bg-gray-800 shadow-lg border-r dark:border-gray-700 z-40 transition-transform duration-300 overflow-y-auto ${
             sidebarOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
@@ -411,6 +584,9 @@ const Viewer = () => {
                   return (
                     <div
                       key={`thumbnail_${pageNum}`}
+                      ref={(el) => {
+                        thumbnailRefs.current[pageNum] = el;
+                      }}
                       onClick={() => scrollToPage(pageNum)}
                       className={`mb-2 p-2 rounded cursor-pointer transition-all ${
                         currentPage === pageNum
@@ -489,6 +665,20 @@ const Viewer = () => {
           </div>
         </div>
       </div>
+
+      {/* 재개 모달 */}
+      {showResumeModal && (
+        <ResumeModal
+          isOpen={showResumeModal}
+          onClose={() => setShowResumeModal(false)}
+          onResume={handleResume}
+          onRestart={handleRestart}
+          title="학습 재개"
+          message={`이전에 ${Math.round(savedProgressRef.current || 0)}%까지 학습하셨습니다. 어디서부터 시작하시겠습니까?`}
+          progress={savedProgressRef.current || 0}
+          currentPage={savedPageRef.current || 1}
+        />
+      )}
     </div>
   );
 };
