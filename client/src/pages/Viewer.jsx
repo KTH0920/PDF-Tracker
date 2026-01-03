@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { updateProgress, fetchPDFs } from '../api';
+import { updateProgress, fetchPDFs, toggleBookmark } from '../api';
 import { getUser } from '../auth';
-import { FaArrowLeft, FaCheckCircle, FaSun, FaMoon, FaBars, FaTimes, FaSearch, FaChevronUp, FaChevronDown } from 'react-icons/fa';
+import { FaArrowLeft, FaCheckCircle, FaSun, FaMoon, FaBars, FaTimes, FaSearch, FaChevronUp, FaChevronDown, FaBookmark } from 'react-icons/fa';
 import useDarkMode from '../hooks/useDarkMode';
 import { PROGRESS_UPDATE_INTERVAL, PROGRESS_UPDATE_THRESHOLD, DEFAULT_PAGE_WIDTH, PAGE_PADDING } from '../utils/constants';
 import ResumeModal from '../components/ResumeModal';
@@ -38,6 +38,9 @@ const Viewer = () => {
   const sidebarRef = useRef(null);
   const thumbnailRefs = useRef({});
   const [pageSearchValue, setPageSearchValue] = useState('');
+  const [bookmarks, setBookmarks] = useState([]);
+  const [bookmarkSidebarOpen, setBookmarkSidebarOpen] = useState(false);
+  const bookmarkSidebarRef = useRef(null);
 
   const loadPDFInfo = useCallback(async () => {
     try {
@@ -47,6 +50,7 @@ const Viewer = () => {
         console.log('PDF 정보 로드 성공:', pdf);
         console.log('PDF 파일 경로:', pdf.filePath);
         setPdfInfo(pdf);
+        setBookmarks(pdf.bookmarks || []);
         
         const savedPage = pdf.currentPage || 1;
         const savedProgress = pdf.progress || 0;
@@ -379,6 +383,31 @@ const Viewer = () => {
     }
   }, []);
 
+  // 북마크 토글
+  const handleBookmarkToggle = useCallback(async (e, pageNumber) => {
+    e.stopPropagation(); // 썸네일 클릭 이벤트 전파 방지
+    
+    if (!pdfInfo) return;
+    
+    try {
+      const response = await toggleBookmark(pdfInfo._id, pageNumber);
+      if (response.pdf) {
+        setBookmarks(response.pdf.bookmarks || []);
+        // pdfInfo도 업데이트
+        setPdfInfo(response.pdf);
+      }
+    } catch (error) {
+      console.error('북마크 토글 실패:', error);
+      alert('북마크를 업데이트하는데 실패했습니다.');
+    }
+  }, [pdfInfo]);
+
+  // 북마크된 페이지만 필터링
+  const bookmarkedPages = useMemo(() => {
+    if (!normalizedFilePath || !numPages) return [];
+    return bookmarks.filter(pageNum => pageNum >= 1 && pageNum <= numPages).sort((a, b) => a - b);
+  }, [bookmarks, normalizedFilePath, numPages]);
+
   // 처음부터 시작
   const handleRestart = useCallback(async () => {
     setShowResumeModal(false);
@@ -463,6 +492,18 @@ const Viewer = () => {
               </h2>
             </div>
             <div className="flex items-center gap-4">
+              {/* 북마크 사이드바 토글 버튼 */}
+              <button
+                onClick={() => setBookmarkSidebarOpen(!bookmarkSidebarOpen)}
+                className={`p-2 rounded-lg transition-colors ${
+                  bookmarkSidebarOpen
+                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+                title="북마크 목록"
+              >
+                <FaBookmark className="text-lg" />
+              </button>
               {/* 페이지 검색창 */}
               <form onSubmit={handlePageSearch} className="flex items-center gap-2">
                 <div className="relative">
@@ -588,12 +629,24 @@ const Viewer = () => {
                         thumbnailRefs.current[pageNum] = el;
                       }}
                       onClick={() => scrollToPage(pageNum)}
-                      className={`mb-2 p-2 rounded cursor-pointer transition-all ${
+                      className={`mb-2 p-2 rounded cursor-pointer transition-all relative ${
                         currentPage === pageNum
                           ? 'bg-blue-100 dark:bg-blue-900 border-2 border-blue-500 dark:border-blue-400'
                           : 'bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600'
                       }`}
                     >
+                      {/* 북마크 아이콘 */}
+                      <button
+                        onClick={(e) => handleBookmarkToggle(e, pageNum)}
+                        className={`absolute top-3 right-3 p-1.5 rounded-full transition-all z-[1] ${
+                          bookmarks.includes(pageNum)
+                            ? 'bg-yellow-400 dark:bg-yellow-500 text-yellow-900 dark:text-yellow-900 opacity-100'
+                            : 'bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-800 opacity-40 hover:opacity-70'
+                        }`}
+                        title={bookmarks.includes(pageNum) ? '북마크 제거' : '북마크 추가'}
+                      >
+                        <FaBookmark className="text-xs" />
+                      </button>
                       <Page
                         pageNumber={pageNum}
                         renderTextLayer={false}
@@ -616,8 +669,81 @@ const Viewer = () => {
           </div>
         </div>
 
+        {/* 북마크 사이드바 */}
+        <div
+          ref={bookmarkSidebarRef}
+          className={`fixed right-0 bg-white dark:bg-gray-800 shadow-lg border-l dark:border-gray-700 z-40 transition-transform duration-300 overflow-y-auto ${
+            bookmarkSidebarOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
+          style={{ 
+            width: '240px',
+            top: `${headerHeight}px`,
+            height: `calc(100vh - ${headerHeight}px)`
+          }}
+        >
+          <div className="p-3 sticky top-0 bg-white dark:bg-gray-800 border-b dark:border-gray-700 z-10">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-white">북마크</h3>
+              <button
+                onClick={() => setBookmarkSidebarOpen(false)}
+                className="p-1 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                <FaTimes className="text-sm" />
+              </button>
+            </div>
+          </div>
+          <div className="p-2">
+            {normalizedFilePath && bookmarkedPages.length > 0 ? (
+              <Document
+                file={normalizedFilePath}
+                loading={
+                  <div className="flex justify-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                  </div>
+                }
+                options={pdfOptions}
+              >
+                {bookmarkedPages.map((pageNum) => (
+                  <div
+                    key={`bookmark_thumbnail_${pageNum}`}
+                    onClick={() => scrollToPage(pageNum)}
+                    className={`mb-2 p-2 rounded cursor-pointer transition-all relative ${
+                      currentPage === pageNum
+                        ? 'bg-blue-100 dark:bg-blue-900 border-2 border-blue-500 dark:border-blue-400'
+                        : 'bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    {/* 북마크 아이콘 */}
+                    <button
+                      onClick={(e) => handleBookmarkToggle(e, pageNum)}
+                      className="absolute top-3 right-3 p-1.5 rounded-full bg-yellow-400 dark:bg-yellow-500 text-yellow-900 dark:text-yellow-900 opacity-100 hover:opacity-80 transition-opacity z-[1]"
+                      title="북마크 제거"
+                    >
+                      <FaBookmark className="text-xs" />
+                    </button>
+                    <Page
+                      pageNumber={pageNum}
+                      renderTextLayer={false}
+                      renderAnnotationLayer={false}
+                      width={200}
+                      className="shadow-sm"
+                    />
+                    <div className="text-xs text-center mt-1 text-gray-600 dark:text-gray-300 font-medium">
+                      {pageNum}
+                    </div>
+                  </div>
+                ))}
+              </Document>
+            ) : (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400 text-sm">
+                북마크된 페이지가 없습니다.
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* PDF 뷰어 영역 */}
-        <div className={`flex-1 transition-all duration-300 ${sidebarOpen ? 'ml-[240px]' : 'ml-0'}`}>
+        <div className={`flex-1 transition-all duration-300 ${sidebarOpen ? 'ml-[240px]' : 'ml-0'} ${bookmarkSidebarOpen ? 'mr-[240px]' : 'mr-0'}`}>
           {/* PDF 뷰어 */}
           <div
             ref={containerRef}

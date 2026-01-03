@@ -30,6 +30,10 @@ const userPDFSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  bookmarks: {
+    type: [Number], // 페이지 번호 배열
+    default: [],
+  },
 }, {
   timestamps: true,
 });

@@ -11,6 +11,7 @@ import { createRequire } from 'module';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// pdf-parse는 CommonJS 모듈이므로 createRequire 사용
 const require = createRequire(import.meta.url);
 
 const router = express.Router();
@@ -176,6 +177,57 @@ router.put('/progress', async (req, res) => {
   } catch (error) {
     console.error('진행률 업데이트 에러:', error);
     res.status(500).json({ error: '진행률 업데이트 중 오류가 발생했습니다.' });
+  }
+});
+
+// 북마크 토글
+router.put('/bookmark', async (req, res) => {
+  try {
+    const { pdfId, pageNumber } = req.body;
+
+    if (!pdfId || !pageNumber) {
+      return res.status(400).json({ error: 'pdfId와 pageNumber가 필요합니다.' });
+    }
+
+    // 페이지 번호 검증
+    if (typeof pageNumber !== 'number' || pageNumber < 1 || !Number.isInteger(pageNumber)) {
+      return res.status(400).json({ error: 'pageNumber는 1 이상의 정수여야 합니다.' });
+    }
+
+    const userId = req.user.userId;
+
+    // PDF 찾기 (사용자 소유 확인)
+    const pdf = await UserPDF.findOne({ _id: pdfId, userId });
+    if (!pdf) {
+      return res.status(404).json({ error: 'PDF를 찾을 수 없습니다.' });
+    }
+
+    // 북마크 배열 복사
+    let bookmarks = [...(pdf.bookmarks || [])];
+
+    // 북마크 토글 (이미 있으면 제거, 없으면 추가)
+    const bookmarkIndex = bookmarks.indexOf(pageNumber);
+    if (bookmarkIndex > -1) {
+      bookmarks.splice(bookmarkIndex, 1);
+    } else {
+      bookmarks.push(pageNumber);
+      bookmarks.sort((a, b) => a - b); // 정렬
+    }
+
+    // 업데이트
+    const updatedPDF = await UserPDF.findByIdAndUpdate(
+      pdfId,
+      { bookmarks },
+      { new: true }
+    );
+
+    res.json({
+      success: true,
+      pdf: updatedPDF,
+    });
+  } catch (error) {
+    console.error('북마크 토글 에러:', error);
+    res.status(500).json({ error: '북마크 토글 중 오류가 발생했습니다.' });
   }
 });
 

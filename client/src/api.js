@@ -67,5 +67,14 @@ export const deletePDF = async (pdfId) => {
   return response.data;
 };
 
+// 북마크 토글
+export const toggleBookmark = async (pdfId, pageNumber) => {
+  const response = await api.put('/api/pdf/bookmark', {
+    pdfId,
+    pageNumber,
+  });
+  return response.data;
+};
+
 export default api;
 
