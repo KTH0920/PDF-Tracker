@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  # 1. Backend App (PDF 업로드 및 서버 로직)
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: pdf-tracker-server
+    ports:
+      - "5000:5000"
+    volumes:
+      # ✅ 핵심 1: 님이 만든 100GB 파티션을 컨테이너의 업로드 폴더와 연결
+      # (실제 무거운 PDF 파일들은 여기에 쌓입니다)
+      - /home/kth/pdf-data:/app/uploads
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - UPLOAD_DIR=/app/uploads
+      # ✅ 핵심 2: 로컬 mongo 컨테이너 사용 (속도 빠름 & 데이터 소유)
+      - MONGO_URI=mongodb://mongo:27017/pdf-tracker
+      # JWT 시크릿 (보안을 위해 임의의 문자열로 설정)
+      - JWT_SECRET=${JWT_SECRET:-kth-server-secret-key-2026}
+      - SERVER_URL=${SERVER_URL:-http://localhost:5000}
+    restart: unless-stopped
+    depends_on:
+      - mongo # DB가 켜져야 서버도 켜짐
+    networks:
+      - pdf-tracker-network
+
+  # 2. Database (파일 정보 기록용 장부)
+  mongo:
+    image: mongo:latest
+    container_name: pdf-tracker-mongo
+    restart: always
+    volumes:
+      # ✅ 핵심 3: 장부 데이터는 프로젝트 폴더 안에 안전하게 보관
+      - ./data/db:/data/db
+    networks:
+      - pdf-tracker-network
+
+  # 3. Frontend App (사용자 화면)
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: pdf-tracker-client
+    ports:
+      - "5173:80" # 외부 접속 포트 5173 -> 내부 Nginx 80
+    depends_on:
+      - server
+    restart: unless-stopped
+    networks:
+      - pdf-tracker-network
+
+# 네트워크 정의 (컨테이너끼리 통신하기 위한 가상 랜선)
+networks:
+  pdf-tracker-network:
+    driver: bridge
