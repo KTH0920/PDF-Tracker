@@ -6,6 +6,10 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
+import dotenv from 'dotenv';
+
+// 환경 변수 로드
+dotenv.config();
 
 // ES 모듈에서 __dirname 사용하기
 const __filename = fileURLToPath(import.meta.url);
@@ -105,7 +109,8 @@ router.delete('/:pdfId', async (req, res) => {
     // 파일 경로에서 실제 파일명 추출
     const fileUrl = pdf.filePath;
     const fileName = decodeURIComponent(fileUrl.split('/').pop());
-    const filePath = path.join(__dirname, '../uploads', fileName);
+    const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
+    const filePath = path.join(path.resolve(UPLOAD_DIR), fileName);
 
     // DB에서 삭제
     await UserPDF.findByIdAndDelete(pdfId);

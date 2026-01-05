@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # ----------------------------------------
+  # 1. Backend Service
+  # ----------------------------------------
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: pdf-tracker-server
+    ports:
+      - "${PORT}:${PORT}"
+    volumes:
+      - /home/kth/pdf-data:/app/uploads
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - PORT=${PORT}
+      - UPLOAD_DIR=/app/uploads
+      - MONGO_URI=${MONGO_URI}
+      - SERVER_URL=${SERVER_URL}
+      - CLIENT_URL=${CLIENT_URL}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+      # 👇 이제 비밀 키는 .env에서 가져옵니다 (안전함)
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - JWT_SECRET=${JWT_SECRET}
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    networks:
+      - pdf-tracker-network
+
+  # ----------------------------------------
+  # 2. Database Service
+  # ----------------------------------------
+  mongo:
+    image: mongo:latest
+    container_name: pdf-tracker-mongo
+    restart: always
+    volumes:
+      - ./data/db:/data/db
+    networks:
+      - pdf-tracker-network
+
+  # ----------------------------------------
+  # 3. Frontend Service
+  # ----------------------------------------
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        # 👇 빌드 시점에도 .env 값을 가져와서 주입합니다
+        - VITE_API_URL=${VITE_API_URL}
+        - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
+    container_name: pdf-tracker-client
+    ports:
+      - "5173:80"
+    depends_on:
+      - server
+    restart: unless-stopped
+    networks:
+      - pdf-tracker-network
+
+networks:
+  pdf-tracker-network:
+    driver: bridge

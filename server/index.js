@@ -18,6 +18,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/pdf-tracker';
+const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 
 // 환경 변수 검증 (프로덕션 환경에서만)
 if (process.env.NODE_ENV === 'production') {
@@ -56,7 +57,7 @@ app.use('/uploads', (req, res, next) => {
     }
   }
   next();
-}, express.static(path.join(__dirname, 'uploads'), {
+}, express.static(path.resolve(UPLOAD_DIR), {
   setHeaders: (res, filePath) => {
     // PDF 파일에 대한 Content-Type 및 CORS 헤더 설정
     if (filePath.endsWith('.pdf')) {
