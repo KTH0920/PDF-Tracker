@@ -1,6 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useGoogleLogin } from '@react-oauth/google';
 import { setAuth } from '../auth';
 import { FaGoogle } from 'react-icons/fa';
 import { API_BASE_URL } from '../utils/constants';
@@ -10,60 +9,81 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const navigate = useNavigate();
+  const codeClientRef = useRef(null);
 
-  const login = useGoogleLogin({
-    flow: 'auth-code', // Authorization Code Flow 사용
-    onSuccess: async (codeResponse) => {
-      try {
-        setLoading(true);
-        // Authorization Code를 백엔드로 전송하여 검증 및 JWT 발급
-        const response = await fetch(`${API_BASE_URL}/api/auth/google`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: codeResponse.code })
+  useEffect(() => {
+    // Google GSI 스크립트가 로드될 때까지 대기
+    const initGoogleSignIn = () => {
+      if (window.google?.accounts?.oauth2) {
+        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+        const redirectUri = window.location.origin;
+
+        codeClientRef.current = window.google.accounts.oauth2.initCodeClient({
+          client_id: clientId,
+          scope: 'openid profile email',
+          ux_mode: 'popup',
+          callback: async (response) => {
+            try {
+              setLoading(true);
+              // Authorization Code를 백엔드로 전송하여 검증 및 JWT 발급
+              const fetchResponse = await fetch(`${API_BASE_URL}/api/auth/google`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: response.code })
+              });
+
+              if (!fetchResponse.ok) {
+                const errorData = await fetchResponse.json().catch(() => ({}));
+                const errorMessage = errorData.details || errorData.error || '인증 실패';
+                console.error('서버 응답 에러:', {
+                  status: fetchResponse.status,
+                  statusText: fetchResponse.statusText,
+                  errorData
+                });
+                throw new Error(errorMessage);
+              }
+
+              const data = await fetchResponse.json();
+              // JWT 토큰과 사용자 정보를 localStorage에 저장
+              setAuth(data.token, data.user);
+              
+              console.log('로그인 성공, 사용자 정보 저장됨:', data.user);
+              
+              // 성공 팝업 표시
+              setShowToast(true);
+              
+              // 팝업 표시 후 대시보드로 이동
+              setTimeout(() => {
+                window.location.href = '/dashboard';
+              }, 1500);
+            } catch (error) {
+              console.error('로그인 에러:', error);
+              alert(`로그인에 실패했습니다: ${error.message}`);
+            } finally {
+              setLoading(false);
+            }
+          },
+          error_callback: (error) => {
+            // 에러 내용을 콘솔에 로그로 출력
+            console.error('Google 로그인 에러:', error);
+            // 로딩 상태를 false로 변경하여 버튼이 다시 활성화되도록 수정
+            setLoading(false);
+          }
         });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          const errorMessage = errorData.details || errorData.error || '인증 실패';
-          console.error('서버 응답 에러:', {
-            status: response.status,
-            statusText: response.statusText,
-            errorData
-          });
-          throw new Error(errorMessage);
-        }
-
-        const data = await response.json();
-        // JWT 토큰과 사용자 정보를 localStorage에 저장
-        setAuth(data.token, data.user);
-        
-        console.log('로그인 성공, 사용자 정보 저장됨:', data.user);
-        
-        // 성공 팝업 표시
-        setShowToast(true);
-        
-        // 팝업 표시 후 대시보드로 이동
-        setTimeout(() => {
-          window.location.href = '/dashboard';
-        }, 1500);
-      } catch (error) {
-        console.error('로그인 에러:', error);
-        alert(`로그인에 실패했습니다: ${error.message}`);
-      } finally {
-        setLoading(false);
+      } else {
+        // Google GSI 스크립트가 아직 로드되지 않았으면 재시도
+        setTimeout(initGoogleSignIn, 100);
       }
-    },
-    onError: () => {
-      console.error('로그인 실패');
-      setLoading(false);
-      alert('로그인에 실패했습니다. 다시 시도해주세요.');
-    }
-  });
+    };
+
+    initGoogleSignIn();
+  }, []);
 
   const handleGoogleLogin = () => {
-    setLoading(true);
-    login();
+    if (codeClientRef.current) {
+      setLoading(true);
+      codeClientRef.current.requestCode();
+    }
   };
 
   return (
